@@ -1,5 +1,23 @@
 import sys
+import os
 import getpass #para que no se lea la contraseña
+
+
+# =============================================================================
+# ACTIVACIÓN AUTOMÁTICA DEL VENV - SOLUCIÓN PARA EL BOTÓN "RUN"
+# =============================================================================
+
+# Ruta al site-packages del venv
+venv_site_packages = os.path.join(os.path.dirname(__file__), 'venv', 'lib', 'python3.12', 'site-packages')
+
+if os.path.exists(venv_site_packages):
+    # Añadir el site-packages del venv al path de Python
+    sys.path.insert(0, venv_site_packages)
+else:
+    print("⚠ No se encontró el venv, usando Python del sistema")
+
+# =============================================================================
+
 
 # Importa las funciones que deben estar definidas en auth.py
 from auth import registrar_usuario, autenticar_usuario, derivar_clave
@@ -15,7 +33,7 @@ def menu_principal():
         # Petición inicial al usuario
         opcion = input("\nUsuario nuevo? (Si/No): ").strip().lower()
 
-        if opcion in ['si', 's', 'sí']:
+        if opcion in {'si', 's', 'sí'}:
             # --- FLUJO DE REGISTRO ---
             print("\n--- REGISTRO DE NUEVO USUARIO ---")
             nombre_usuario = input("Introduce un nombre de usuario: ").strip()
@@ -31,7 +49,7 @@ def menu_principal():
                 # Si la autenticación es exitosa, se sale del bucle
                 return nombre_usuario, contrasena 
             
-        elif opcion in ['no', 'n']:
+        elif opcion in {'no', 'n'}:
             # --- FLUJO DE INICIO DE SESIÓN ---
             print("\n--- INICIO DE SESIÓN ---")
             nombre_usuario = input("Usuario: ").strip()
@@ -53,7 +71,7 @@ def menu_principal():
             sys.exit(0)
             
         else:
-            print("Opción no válida. Por favor, responde 'Si' o 'No'.")
+            print("\nOpción no válida. Por favor, responde 'Si' o 'No'.")
 
 
 def main():
