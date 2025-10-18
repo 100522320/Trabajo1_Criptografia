@@ -12,3 +12,10 @@ from cryptography.hazmat.backends import default_backend
 
 # Utilidades para conversión de bytes
 import base64
+
+def registrar_usuario(nombre_usuario, contrasena): 
+    return True
+def autenticar_usuario(nombre_usuario, contrasena):
+    return True
+def derivar_clave(contrasena_maestra, usuario_autenticado):
+    return 1
