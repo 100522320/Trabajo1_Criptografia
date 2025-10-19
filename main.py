@@ -103,8 +103,7 @@ def menu_principal():
                 print(f"Bienvenido al SecureCitas CLI, {nombre_usuario}!")
                 # Si la autenticación es exitosa, se sale del bucle
                 return nombre_usuario, contraseña
-            else:
-                print("Error de autenticación: Usuario o contraseña incorrectos.")
+            
                
         elif opcion in ['salir', 'exit', 'q']:
             print("Saliendo de la aplicación.")
@@ -123,7 +122,11 @@ def main():
     try:
         # 1. Gestionar la autenticación/registro
         usuario_autenticado, contraseña_maestra = menu_principal()
-       
+
+        #-------------------------------------------
+        #     A PARTIR DE AQUI NO ESTA BIEN
+        #-------------------------------------------
+
         # 2. Derivar la clave simétrica K usando la contraseña y el salt
         print("\n--- DERIVANDO CLAVE MAESTRA ---")
         clave_maestra_K = derivar_clave(contraseña_maestra, usuario_autenticado)

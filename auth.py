@@ -3,7 +3,7 @@ import json # Para leer/escribir users.json
 
 # Para el hashing de la contraseña (Registro de usuario)
 from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
-#sfrom cryptography.hazmat.primitives.kdf.argon2 import InvalidKeyError
+#from cryptography.hazmat.primitives.kdf.pbkdf2 import InvalidKeyError
 from cryptography.hazmat.primitives import hashes
 
 # Para derivar la clave de cifrado K (una vez autenticado)
@@ -23,16 +23,29 @@ T_COST = 3      # Coste de tiempo (numero de iteraciones)
 P_COST = 4      # Paralelismo (numero de threads)
 HASH_LENGTH = 32 # Longitud de la clave derivada
 
-def registrar_usuario(nombre_usuario, contraseña):
-    """
-    Genera un salt seguro, hashea la contraseña usando Argon2id y
-    almacena el nombre de usuario, el salt y el hash en un archivo JSON.
-    """
-    # 1.Generamos el salt
-    salt = os.urandom(SALT_LENGTH)
 
+def load_users():
+    """
+    Carga el diccionario de usuarios desde el archivo JSON.
+    Devuelve un diccionario vacío si el archivo no existe o está corrupto.
+    """
+    try:
+        with open(USERS_FILE, 'r') as f:
+            # Intenta cargar los datos del archivo
+            users = json.load(f)
+            # Asegura que lo cargado sea un diccionario (manejo de archivos mal formados)
+            if not isinstance(users, dict):
+                return {}
+            return users
+    except (FileNotFoundError, json.JSONDecodeError):
+        # Devuelve un diccionario vacío si el archivo no existe o no es JSON válido
+        return {}
 
-    # 2. Instanciar la Función de Derivación de Clave (KDF) Argon2id
+def hashear_contraseña(salt,contraseña):
+    """
+    Recibe un salt y una contraseña y devuelve su hash
+    """
+    #Instanciar la Función de Derivación de Clave (KDF) Argon2id
     kdf = Argon2id(
         salt=salt,
         memory_cost=M_COST,
@@ -41,18 +54,31 @@ def registrar_usuario(nombre_usuario, contraseña):
         length=HASH_LENGTH
     )
 
-
-    # 3. Hashear la contraseña
+    #Hashear la contraseña
     #Argon2id.derive espera bytes, por lo que se codifica la cadena de la contraseña.
     try:
         contraseña_bytes = contraseña.encode('utf-8')
         contraseña_hash = kdf.derive(contraseña_bytes)
     except Exception as e:
         print(f"Error durante el hasheo de la contraseña: {e}")
+        return None
+    
+    return contraseña_hash
+
+def registrar_usuario(nombre_usuario, contraseña):
+    """
+    Genera un salt seguro, hashea la contraseña usando Argon2id y
+    almacena el nombre de usuario, el salt y el hash en un archivo JSON.
+    """
+    # 1.Generamos el salt
+    salt = os.urandom(SALT_LENGTH)
+
+    # 2. Hashear la contraseña
+    contraseña_hash = hashear_contraseña(salt,contraseña)
+    if not contraseña_hash:
         return False
 
-
-    # 4. Preparar los datos para el almacenamiento
+    # 3. Preparar los datos para el almacenamiento
     # La codificación Base64 convierte bytes (salt, hash) en cadenas seguras.
     datos_usuario = {
         'nombre_usuario': nombre_usuario,
@@ -62,23 +88,18 @@ def registrar_usuario(nombre_usuario, contraseña):
         'hash': base64.b64encode(contraseña_hash).decode('utf-8')
     }
    
-    # 5. Cargar usuarios existentes o crear un diccionario vacío
-    try:
-        with open(USERS_FILE, 'r') as f:
-            users = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        users = {}
-
+    # 4. Cargar usuarios existentes o crear un diccionario vacío
+    users = load_users()
 
     # Verificar si el usuario ya existe
     if nombre_usuario in users:
         print(f"Error: El usuario '{nombre_usuario}' ya existe.")
         return False
        
-    # 6. Almacenar el nombre de usuario y los datos en el diccionario de usuarios
+    # 5. Almacenar el nombre de usuario y los datos en el diccionario de usuarios
     users[nombre_usuario] = datos_usuario
    
-    # 7. Escribir el diccionario actualizado de nuevo en el archivo JSON
+    # 6. Escribir el diccionario actualizado de nuevo en el archivo JSON
     try:
         with open(USERS_FILE, 'w') as f:
             json.dump(users, f, indent=4)
@@ -89,7 +110,55 @@ def registrar_usuario(nombre_usuario, contraseña):
         return False
    
 def autenticar_usuario(nombre_usuario, contraseña):
-    return True
+    """
+    Autentica un usuario buscando su hash y salt, y usando Argon2id.verify() 
+    para una comparación segura de contraseñas.
+    """
+    # 1. Buscamos al usuario en el json de usuarios
+    users = load_users()
+    if nombre_usuario not in users:
+        print(f"Fallo de autenticación: Usuario '{nombre_usuario}' no existe.")
+        return False
+    
+    # 2. Tomamos sus datos (salt y hash como cadenas Base64)
+    try:
+        salt_bytes = base64.b64decode(users[nombre_usuario]["salt"])
+        hash_almacenado = base64.b64decode(users[nombre_usuario]["hash"])
+    except Exception as e:
+        print(f"Error al decodificar Base64 de credenciales: {e}")
+        return False
+
+    # 3. Instanciar el KDF con el salt recuperado y los parámetros originales
+    # Necesitamos el KDF para acceder al método verify().
+    kdf = Argon2id(
+        salt=salt_bytes,
+        memory_cost=M_COST,
+        iterations=T_COST,
+        lanes=P_COST,
+        length=HASH_LENGTH
+    )
+    
+    # 4. Usar el método verify() para hashear la contraseña introducida 
+    # y compararla de forma segura con el hash almacenado.
+    try:
+        contraseña_bytes = contraseña.encode('utf-8')
+        kdf.verify(contraseña_bytes, hash_almacenado)
+        # Si verify() no lanza una excepción, la autenticación es exitosa.
+
+        return True 
+        
+    #except InvalidKeyError:
+        # Esto ocurre cuando la contraseña introducida es incorrecta.
+        #print(f"Fallo de autenticación: Contraseña incorrecta para '{nombre_usuario}'.")
+        #return False
+        
+    except Exception as e:
+        # Otros errores durante el proceso de verificación.
+        print(f"Error inesperado durante la verificación: {e}")
+        return False
+
+
+
 def derivar_clave(contraseña_maestra, usuario_autenticado):
     return 1
 
