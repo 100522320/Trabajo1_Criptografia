@@ -1,4 +1,3 @@
-import select
 import sys
 import os
 import getpass #para que no se lea la contraseña
@@ -10,7 +9,7 @@ import getpass #para que no se lea la contraseña
 
 def setup_venv():
     """Configura el venv de forma compatible con cualquier SO"""
-    venv_base = os.path.join(os.path.dirname(__file__), 'venv')
+    venv_base = os.path.join(os.path.dirname(__file__), '.venv')
     
     # Posibles rutas de site-packages según el SO
     possible_paths = []
@@ -79,32 +78,32 @@ def menu_principal():
             # --- FLUJO DE REGISTRO ---
             print("\n--- REGISTRO DE NUEVO USUARIO ---")
             nombre_usuario = input("Introduce un nombre de usuario: ").strip()
-            contrasena = getpass.getpass("Introduce una contraseña robusta: ").strip()
+            contraseña = getpass.getpass("Introduce una contraseña robusta: ").strip()
             
-            if not nombre_usuario or not contrasena:
+            if not nombre_usuario or not contraseña:
                 print("El usuario y la contraseña no pueden estar vacíos. Inténtalo de nuevo.")
                 continue
 
-            if registrar_usuario(nombre_usuario, contrasena):
+            if registrar_usuario(nombre_usuario, contraseña):
                 print("\nRegistro exitoso.")
                 print(f"Bienvenido al SecureCitas CLI, {nombre_usuario}!")
                 # Si la autenticación es exitosa, se sale del bucle
-                return nombre_usuario, contrasena 
+                return nombre_usuario, contraseña 
             
         elif opcion in {'no', 'n'}:
             # --- FLUJO DE INICIO DE SESIÓN ---
             print("\n--- INICIO DE SESIÓN ---")
             nombre_usuario = input("Usuario: ").strip()
-            contrasena = getpass.getpass("Contraseña: ").strip()
+            contraseña = getpass.getpass("Contraseña: ").strip()
             
-            if not nombre_usuario or not contrasena:
+            if not nombre_usuario or not contraseña:
                 print("El usuario y la contraseña no pueden estar vacíos. Inténtalo de nuevo.")
                 continue
             
-            if autenticar_usuario(nombre_usuario, contrasena):
+            if autenticar_usuario(nombre_usuario, contraseña):
                 print(f"Bienvenido al SecureCitas CLI, {nombre_usuario}!")
                 # Si la autenticación es exitosa, se sale del bucle
-                return nombre_usuario, contrasena 
+                return nombre_usuario, contraseña 
             else:
                 print("Error de autenticación: Usuario o contraseña incorrectos.")
                 
@@ -125,11 +124,11 @@ def main():
     
     try:
         # 1. Gestionar la autenticación/registro
-        usuario_autenticado, contrasena_maestra = menu_principal()
+        usuario_autenticado, contraseña_maestra = menu_principal()
         
         # 2. Derivar la clave simétrica K usando la contraseña y el salt
         print("\n--- DERIVANDO CLAVE MAESTRA ---")
-        clave_maestra_K = derivar_clave(contrasena_maestra, usuario_autenticado)
+        clave_maestra_K = derivar_clave(contraseña_maestra, usuario_autenticado)
         
         # 3. Iniciar la lógica de la aplicación (consulta/edición de citas)
         # Aquí iría el código de la segunda fase (Eval 2)
