@@ -1,3 +1,4 @@
+import select
 import sys
 import os
 import getpass #para que no se lea la contraseña
@@ -14,7 +15,7 @@ if os.path.exists(venv_site_packages):
     # Añadir el site-packages del venv al path de Python
     sys.path.insert(0, venv_site_packages)
 else:
-    print("⚠ No se encontró el venv, usando Python del sistema")
+    print("Error: no se encontró el venv, usando Python del sistema")
 
 # =============================================================================
 
@@ -28,6 +29,14 @@ def menu_principal():
     Gestiona el bucle de la terminal para el inicio de sesión o registro.
     Retorna el nombre de usuario y la contraseña maestra si la autenticación es exitosa.
     """
+
+    # Limpiamos el buffer de entrada antes del primer input si estamos en un terminal interactivo real
+    try:
+        if sys.stdin.isatty():
+            import termios
+            termios.tcflush(sys.stdin, termios.TCIFLUSH)
+    except (ImportError, Exception):
+        pass
     
     while True:
         # Petición inicial al usuario
@@ -71,7 +80,7 @@ def menu_principal():
             sys.exit(0)
             
         else:
-            print("\nOpción no válida. Por favor, responde 'Si' o 'No'.")
+            print("\nOpción no válida. Por favor, responde 'Si' o 'No'")
 
 
 def main():
