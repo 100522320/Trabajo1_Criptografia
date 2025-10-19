@@ -1,4 +1,3 @@
-import select
 import sys
 import os
 import getpass #para que no se lea la contraseña
@@ -10,7 +9,7 @@ import getpass #para que no se lea la contraseña
 
 def setup_venv():
     """Configura el venv de forma compatible con cualquier SO"""
-    venv_base = os.path.join(os.path.dirname(__file__), 'venv')
+    venv_base = os.path.join(os.path.dirname(__file__), '.venv')
     
     # Posibles rutas de site-packages según el SO
     possible_paths = []
