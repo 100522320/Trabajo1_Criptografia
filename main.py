@@ -5,17 +5,40 @@ import getpass #para que no se lea la contraseña
 
 
 # =============================================================================
-# ACTIVACIÓN AUTOMÁTICA DEL VENV - SOLUCIÓN PARA EL BOTÓN "RUN"
+# ACTIVACIÓN AUTOMÁTICA DEL VENV - COMPATIBLE CON TODOS LOS SISTEMAS
 # =============================================================================
 
-# Ruta al site-packages del venv
-venv_site_packages = os.path.join(os.path.dirname(__file__), 'venv', 'lib', 'python3.12', 'site-packages')
+def setup_venv():
+    """Configura el venv de forma compatible con cualquier SO"""
+    venv_base = os.path.join(os.path.dirname(__file__), 'venv')
+    
+    # Posibles rutas de site-packages según el SO
+    possible_paths = []
+    
+    # Linux/Mac paths
+    python_versions = [
+        f"python{sys.version_info.major}.{sys.version_info.minor}",
+        f"python{sys.version_info.major}",
+        "python3"
+    ]
+    
+    for py_version in python_versions:
+        possible_paths.append(os.path.join(venv_base, 'lib', py_version, 'site-packages'))
+    
+    # Windows paths
+    possible_paths.append(os.path.join(venv_base, 'Lib', 'site-packages'))
+    
+    # Buscar la primera ruta que exista
+    for path in possible_paths:
+        if os.path.exists(path):
+            sys.path.insert(0, path)
+            return True
+    
+    return False
 
-if os.path.exists(venv_site_packages):
-    # Añadir el site-packages del venv al path de Python
-    sys.path.insert(0, venv_site_packages)
-else:
-    print("Error: no se encontró el venv, usando Python del sistema")
+# Intentar configurar el venv
+if not setup_venv():
+    print("AVISO: No se encontró el venv, usando Python del sistema")
 
 # =============================================================================
 
@@ -33,9 +56,19 @@ def menu_principal():
     # Limpiamos el buffer de entrada antes del primer input si estamos en un terminal interactivo real
     try:
         if sys.stdin.isatty():
+            # Linux/Mac
             import termios
             termios.tcflush(sys.stdin, termios.TCIFLUSH)
-    except (ImportError, Exception):
+    except ImportError:
+        try:
+            # Windows
+            import msvcrt
+            while msvcrt.kbhit():
+                msvcrt.getch()
+        except ImportError:
+            # Fallback genérico
+            pass
+    except Exception:
         pass
     
     while True:
