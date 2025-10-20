@@ -14,7 +14,9 @@ from cryptography.hazmat.backends import default_backend
 # Utilidades para conversión de bytes
 import base64
 
-# --- Configuracion ---
+#-----------------------------
+#        Configuracion 
+#-----------------------------
 USERS_FILE = './jsons/usuarios.json'
 SALT_LENGTH = 16 # 16 bytes para el salt
 # Parametros para Argon2id
@@ -22,9 +24,12 @@ M_COST = 524288  # Coste de memoria (512 MB ya que la unidad es KB)
 T_COST = 3      # Coste de tiempo (numero de iteraciones)
 P_COST = 4      # Paralelismo (numero de threads)
 HASH_LENGTH = 32 # Longitud de la clave derivada
+# Parametros para PBKDF2
+KEY_K_LENGTH = 32 # Longitud deseada para la clave simétrica (32 bytes = 256 bits para AES-256)
+PBKDF2_ITERATIONS = 600000 # Número de iteraciones para PBKDF2.
 
 
-def load_users():
+def load_users() -> dict:
     """
     Carga el diccionario de usuarios desde el archivo JSON.
     Devuelve un diccionario vacío si el archivo no existe o está corrupto.
@@ -41,7 +46,7 @@ def load_users():
         # Devuelve un diccionario vacío si el archivo no existe o no es JSON válido
         return {}
 
-def hashear_contraseña(salt,contraseña):
+def hashear_contraseña(salt: str,contraseña: str) -> bytes | None:
     """
     Recibe un salt y una contraseña y devuelve su hash
     """
@@ -65,7 +70,7 @@ def hashear_contraseña(salt,contraseña):
     
     return contraseña_hash
 
-def registrar_usuario(nombre_usuario, contraseña):
+def registrar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     """
     Genera un salt seguro, hashea la contraseña usando Argon2id y
     almacena el nombre de usuario, el salt y el hash en un archivo JSON.
@@ -109,7 +114,7 @@ def registrar_usuario(nombre_usuario, contraseña):
         print(f"Error al escribir en el archivo {USERS_FILE}: {e}")
         return False
    
-def autenticar_usuario(nombre_usuario, contraseña):
+def autenticar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     """
     Autentica un usuario buscando su hash y salt, y usando Argon2id.verify() 
     para una comparación segura de contraseñas.
@@ -159,6 +164,40 @@ def autenticar_usuario(nombre_usuario, contraseña):
 
 
 
-def derivar_clave(contraseña_maestra, usuario_autenticado):
-    return 1
+def derivar_clave(contraseña_maestra: str, usuario_autenticado: str)-> bytes | None:
+    """
+    Deriva la Clave Maestra de Cifrado (K) para el usuario autenticado
+    a partir de su contraseña y el salt almacenado, usando PBKDF2HMAC.
+    """
+
+    #1.Obtenemos los datos del json de usuarios
+    users = load_users()
+    #No hace falta comprobar si el usuario existe porque esta funcion solo se llama cuando ya hemos autenticado esto
+    try:    
+        salt_bytes = base64.b64decode(users[usuario_autenticado]["salt"])
+    except Exception as e:
+        print(f"Error al decodificar Base64 del salt para la derivación: {e}")
+        return None
+    
+    # 2. Instanciar el KDF (Key Derivation Function) PBKDF2HMAC
+    # Utilizamos el mismo salt que para el hashing, pero con PBKDF2.
+    kdf = PBKDF2HMAC(
+        algorithm=SHA256(),
+        length=KEY_K_LENGTH,
+        salt=salt_bytes,
+        iterations=PBKDF2_ITERATIONS,
+        backend=default_backend()
+    )
+
+    # 3. Derivar la clave K
+    try:
+        contraseña_bytes = contraseña_maestra.encode('utf-8')
+        clave_K = kdf.derive(contraseña_bytes)
+        print(f"DEBUG: Clave K derivada ({KEY_K_LENGTH*8} bits).")
+        return clave_K
+        
+    except Exception as e:
+        print(f"Error durante la derivación de clave con PBKDF2HMAC: {e}")
+        return None
+
 

@@ -123,10 +123,6 @@ def main():
         # 1. Gestionar la autenticación/registro
         usuario_autenticado, contraseña_maestra = menu_principal()
 
-        #-------------------------------------------
-        #     A PARTIR DE AQUI NO ESTA BIEN
-        #-------------------------------------------
-
         # 2. Derivar la clave simétrica K usando la contraseña y el salt
         print("\n--- DERIVANDO CLAVE MAESTRA ---")
         clave_maestra_K = derivar_clave(contraseña_maestra, usuario_autenticado)
@@ -136,8 +132,7 @@ def main():
         # logica_principal_aplicacion(usuario_autenticado, clave_maestra_K)
        
         print(f"\nUsuario '{usuario_autenticado}' listo para operar con la clave K.")
-
-
+        
     except SystemExit:
         # Captura la salida si el usuario usa 'q' o 'salir' en el menú.
         pass
