@@ -1,4 +1,5 @@
 import sys
+import re
 import os
 import getpass #para que no se lea la contraseña
 
@@ -44,6 +45,33 @@ if not setup_venv():
 from auth import registrar_usuario, autenticar_usuario, derivar_clave
 # from crypto import logica_principal_aplicacion # Para el flujo posterior de Eval 2
 
+def contraseñas_iguales(contraseña1:str, contraseña2:str)->bool:
+    """Comprueba que las 2 contraseñas sean iguales"""
+    return (contraseña1 == contraseña2)
+
+def contraseña_robusta(contraseña):
+    """Comprueba que la contraseña sea robusta, cumpliendo los siguientes criterios:
+    1. Mínimo 8 caracteres de longitud.
+    2. Contiene al menos 1 dígito (número).
+    3. Contiene al menos 1 letra mayúscula.
+    """
+    # 1. Verificar la longitud mínima (8 caracteres)
+    if len(contraseña) < 8:
+        return False
+    
+    # 2. Verificar al menos 1 número
+    # Usa una expresión regular para buscar cualquier dígito [0-9]
+    if not re.search(r"\d", contraseña):
+        return False
+        
+    # 3. Verificar al menos 1 letra mayúscula
+    # Usa una expresión regular para buscar cualquier letra mayúscula [A-Z]
+    if not re.search(r"[A-Z]", contraseña):
+        return False
+        
+    # Si pasa todas las comprobaciones, la contraseña es robusta
+    return True
+
 def menu_principal():
     """
     Gestiona el bucle de la terminal para el inicio de sesión o registro.
@@ -76,12 +104,20 @@ def menu_principal():
             # --- FLUJO DE REGISTRO ---
             print("\n--- REGISTRO DE NUEVO USUARIO ---")
             nombre_usuario = input("Introduce un nombre de usuario: ").strip()
-            contraseña = getpass.getpass("Introduce una contraseña robusta: ").strip()
+            contraseña = getpass.getpass("Introduce una contraseña: ").strip()
+            contraseña_repetir = getpass.getpass("Repite la contraseña: ").strip()
            
-            if not nombre_usuario or not contraseña:
-                print("El usuario y la contraseña no pueden estar vacíos. Inténtalo de nuevo.")
+            if not nombre_usuario or not contraseña or not contraseña_repetir:
+                print("El usuario y las contraseñas no pueden estar vacíos. Inténtalo de nuevo.")
                 continue
 
+            if not contraseñas_iguales(contraseña,contraseña_repetir):
+                print("Las contraseñas deben ser iguales. Inténtalo de nuevo.")
+                continue
+
+            if not contraseña_robusta(contraseña):
+                print("La contraseña debe ser de minimo 8 caracteres, con 1 numero y 1 mayuscula. Inténtalo de nuevo.")
+                continue
 
             if registrar_usuario(nombre_usuario, contraseña):
                 print("\nRegistro exitoso.")
@@ -132,7 +168,7 @@ def main():
         # logica_principal_aplicacion(usuario_autenticado, clave_maestra_K)
        
         print(f"\nUsuario '{usuario_autenticado}' listo para operar con la clave K.")
-        
+
     except SystemExit:
         # Captura la salida si el usuario usa 'q' o 'salir' en el menú.
         pass
