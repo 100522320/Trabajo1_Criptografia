@@ -178,6 +178,5 @@ def main():
 
 
 
-# Este es el estándar de Python para ejecutar la función principal
 if __name__ == '__main__':
     main()
