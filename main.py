@@ -43,6 +43,8 @@ if not setup_venv():
 
 # Importa las funciones que deben estar definidas en auth.py
 from auth import registrar_usuario, autenticar_usuario, derivar_clave
+# Importa las funciones de la aplicacion que deben estar definidas en funcionalidades.py
+from funcionalidades import aplicacion
 # from crypto import logica_principal_aplicacion # Para el flujo posterior de Eval 2
 
 def contraseñas_iguales(contraseña1:str, contraseña2:str)->bool:
@@ -121,7 +123,7 @@ def menu_principal():
 
             if registrar_usuario(nombre_usuario, contraseña):
                 print("\nRegistro exitoso.")
-                print(f"Bienvenido al SecureCitas CLI, {nombre_usuario}!")
+                print(f"Bienvenido a SecureCitas CLI, {nombre_usuario}!")
                 # Si la autenticación es exitosa, se sale del bucle
                 return nombre_usuario, contraseña
            
@@ -136,7 +138,7 @@ def menu_principal():
                 continue
            
             if autenticar_usuario(nombre_usuario, contraseña):
-                print(f"Bienvenido al SecureCitas CLI, {nombre_usuario}!")
+                print(f"Bienvenido a SecureCitas CLI, {nombre_usuario}!")
                 # Si la autenticación es exitosa, se sale del bucle
                 return nombre_usuario, contraseña
             
@@ -162,12 +164,18 @@ def main():
         # 2. Derivar la clave simétrica K usando la contraseña y el salt
         print("\n--- DERIVANDO CLAVE MAESTRA ---")
         clave_maestra_K = derivar_clave(contraseña_maestra, usuario_autenticado)
+
+        if not clave_maestra_K:
+            return
+        
+        print(f"\nUsuario '{usuario_autenticado}' listo para operar con la clave K.\n")
+
+        # 3. Iniciar la lógica de la aplicación
+        aplicacion(usuario_autenticado,clave_maestra_K)
+
+        
        
-        # 3. Iniciar la lógica de la aplicación (consulta/edición de citas)
-        # Aquí iría el código de la segunda fase (Eval 2)
-        # logica_principal_aplicacion(usuario_autenticado, clave_maestra_K)
-       
-        print(f"\nUsuario '{usuario_autenticado}' listo para operar con la clave K.")
+        
 
     except SystemExit:
         # Captura la salida si el usuario usa 'q' o 'salir' en el menú.

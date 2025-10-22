@@ -3,5 +3,20 @@
         "nombre_usuario": "sss",
         "salt": "0aL7psfDpjeJ2Mm9lK1BjA==",
         "hash": "m9pAG5//ANsGnIJVNHjgXXAcg0af+87I8sJ4jwFS7Mw="
+    },
+    "christian": {
+        "nombre_usuario": "christian",
+        "salt": "9bW49ZyDS12SY6zxndfpcw==",
+        "hash": "PkHIQGVp/5OmiPmr5Qm7hVoxmXEEpgi5ZwrXyVzDWNo="
+    },
+    "monica": {
+        "nombre_usuario": "monica",
+        "salt": "PNwSohHu4aVTWAOtB5Pr/g==",
+        "hash": "QvV89RMBKmjPmFdkCA+DqAKPNoJCYG6NllD00e77x3s="
+    },
+    "adrian": {
+        "nombre_usuario": "adrian",
+        "salt": "VKe828ckPvUUGTkayYQHag==",
+        "hash": "hrUSnpynVrrK1JZ7dJTP6zZGh6qSWosiYyC2fFDKd1A="
     }
 }
