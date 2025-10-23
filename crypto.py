@@ -16,6 +16,7 @@ import base64
 #        Configuracion 
 #-----------------------------
 CITAS_FILE = './jsons/citas.json'
+LONGITUD_AES_NONCE = 12
 
 def load_citas() -> dict:
     """
@@ -34,33 +35,93 @@ def load_citas() -> dict:
         # Devuelve un diccionario vacío si el archivo no existe o no es JSON válido
         return {}
 
-def encriptar_cita(usuario_autenticado:str ,clave_maestra_K:bytes, fecha:datetime):
+def guardar_cita(usuario: str, fecha: datetime, motivo_encriptado: str) -> None:
+    # Guardamos los datos de la cita
+    citas = load_citas()
+    if usuario not in citas:
+        citas[usuario] = {}
+    
+    fecha_clave = fecha.isoformat()
+    
+    citas[usuario][fecha_clave] = motivo_encriptado
+    
+    with open(CITAS_FILE, 'w') as f:
+        json.dump(citas, f, indent=4)
+    return
+
+def obtener_cita(usuario: str, fecha: datetime) -> str:
+    # Busca en el JSON una cita para un usuario y fecha específicos y devuelve el motivo cifrado (string en Base64) si lo encuentra
+    citas = load_citas()
+    
+    # Comprobamos que el usuario exista en el diccionario de citas
+    if usuario in citas:
+        # Convertimos la fecha a formato ISO para buscar la clave en el JSON
+        fecha_clave = fecha.isoformat()
+        
+        # Usamos .get() para buscar la clave; devuelve None si no la encuentra
+        return citas[usuario].get(fecha_clave)
+        
+    # Si el usuario no tiene ninguna cita, devolvemos None
+    return None
+
+def encriptar_cita(clave_maestra_K:bytes, motivo_cita: str) -> str:
     try:
-        # Convertimos la fecha a un string estándar y luego a bytes para poder cifrarlo
-        plaintext = fecha.isoformat().encode('utf-8')
+        # Convertimos el motivo a texto plano
+        texto_plano = motivo_cita.encode('utf-8')
 
         # Generamos un 'nonce' aleatorio
-        nonce = os.urandom(12)
-        # Configuramos el cifrador AES-GCM para que use la librería AES con nuestra clave maestra (clave_maestra_K),
-        # con el modo de operación GCM, pasándole el nonce que acabamos de generar
-        cipher = Cipher(algorithms.AES(clave_maestra_K), modes.GCM(nonce), backend=default_backend())
-        encryptor = cipher.encryptor()
+        nonce = os.urandom(LONGITUD_AES_NONCE)
 
-        # Ciframos el texto plano
-        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+        # Ciframos el texto plano con un cifrador simétrico de flujo
+        cifrador = Cipher(algorithms.AES(clave_maestra_K), modes.GCM(nonce), backend=default_backend())
+        encriptador = cifrador.encryptor()
+        ciphertext = encriptador.update(texto_plano) + encriptador.finalize()
 
         # Obtenemos el 'tag' de autenticación
-        tag = encryptor.tag
+        tag = encriptador.tag
+
         # Concatenamos nonce, tag y el texto cifrado en un único bloque de bytes para almacenarlos juntos y lo codificamos todo en Base64 
         # para convertir esos bytes en un string seguro que podemos guardar sin problemas en un archivo JSON
-        encrypted_data = base64.b64encode(nonce + tag + ciphertext).decode('utf-8')
+        motivo_encriptado = base64.b64encode(nonce + tag + ciphertext).decode('utf-8')
+        print("¡Motivo de la cita cifrado con éxito!")
         
-        print("¡Cita cifrada con éxito!")
-        return encrypted_data
+        return motivo_encriptado
 
     except Exception as e:
-        print(f"Error durante el cifrado de la cita: {e}")
-        return None
+        print(f"Error durante el cifrado o guardado de la cita: {e}")
+        return
 
-def desencriptar_cita(usuario_autenticado:str ,clave_maestra_K:bytes, cita):
-    return
+def desencriptar_cita(clave_maestra_K: bytes, motivo_cifrado: str) -> str | None:
+    """
+    Descifra el motivo de una cita cifrada con AES-265-GCM.
+    Devuelve el string del motivo si es exitoso, None si falla.
+    """
+    try:
+        # Decodificamos la cadena de texto Base64 para obtener el bloque de bytes original
+        bytes_motivo_encriptado = base64.b64decode(motivo_cifrado.encode('utf-8'))
+
+        # Separamos el nonce, que son los primeros 12 bytes
+        nonce = bytes_motivo_encriptado[:LONGITUD_AES_NONCE]
+        # Separamos el tag de autenticación, que son los siguientes 16 bytes
+        tag = bytes_motivo_encriptado[LONGITUD_AES_NONCE:LONGITUD_AES_NONCE + 16]
+        # El resto del bloque de bytes es el texto cifrado
+        motivo_cifrado = bytes_motivo_encriptado[LONGITUD_AES_NONCE + 16:]
+
+        # Configuramos el descifrador con el algoritmo (AES), la clave, y el modo GCM y le pasamos el nonce y el tag que hemos extraído
+        cifrador = Cipher(algorithms.AES(clave_maestra_K), modes.GCM(nonce, tag), backend=default_backend())
+        descifrador = cifrador.decryptor()
+
+        # Ejecutamos el descifrado. La librería verificará automáticamente si el tag es correcto
+        texto_plano = descifrador.update(motivo_cifrado) + descifrador.finalize()
+        
+        # Si la verificación ha sido exitosa, convertimos los bytes del texto plano a un string, que será el motivo descifrado
+        return texto_plano.decode('utf-8')
+
+    # Si la verificación del tag falla, se captura la excepción y se informa del error
+    except InvalidTag:
+        print("¡ERROR DE AUTENTICACIÓN! La cita podría haber sido manipulada.")
+        return None
+    # Capturamos cualquier otro posible error durante el proceso
+    except Exception as e:
+        print(f"Error durante el descifrado de la cita: {e}")
+        return None

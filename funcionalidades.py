@@ -3,7 +3,7 @@ import json # Para leer/escribir los datos de la cita cifrada
 # Utilidades para conversión
 import base64
 #importamos de crypto.py algunas funciones para encriptar y desciptar las citas
-from crypto import encriptar_cita,desencriptar_cita,load_citas
+from crypto import encriptar_cita,desencriptar_cita,load_citas,guardar_cita, obtener_cita
 
 
 def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
@@ -69,7 +69,7 @@ def ver_citas(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
 
 def crear_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
 
-    #1.Fecha de la cita
+    # Fecha de la cita
     fecha_str = input("¿En que fecha y hora quiere la cita?(DD/MM/YYYY hh:mm):")
     fecha = datetime.strptime(fecha_str, "%d/%m/%Y %H:%M")
     #La unica fecha imposible sera anterior o igual a ahora, las demas las damos como buenas
@@ -77,10 +77,15 @@ def crear_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
         print("La fecha introducida no es valida (ya ha pasado). Porfavor intentelo de nuevo.")
         return
     
-    #2. Creamos y encriptamos/añadimos la cita
-    encriptar_cita(usuario_autenticado,clave_maestra_K,fecha)
+    # Motivo de la cita (lo que se va a cifrar)
+    motivo = input("Introduzca el motivo de la cita: ")
     
+    # Añadimos la cita encriptada a citas.json
+    motivo_cifrado = encriptar_cita(clave_maestra_K, motivo)
+    guardar_cita(usuario_autenticado, fecha, motivo_cifrado)
 
+    return
+    
 def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     fecha_cita = input("¿En que fecha tiene la cita que desea editar?(DD/MM/YYYY hh:mm):")
     nueva_fecha = input("¿A que fecha desea cambiarla?(DD/MM/YYYY hh:mm):")
