@@ -35,5 +35,32 @@ def load_citas() -> dict:
         return {}
 
 def encriptar_cita(usuario_autenticado:str ,clave_maestra_K:bytes, fecha:datetime):
+    try:
+        # Convertimos la fecha a un string estándar y luego a bytes para poder cifrarlo
+        plaintext = fecha.isoformat().encode('utf-8')
+
+        # Generamos un 'nonce' aleatorio
+        nonce = os.urandom(12)
+        # Configuramos el cifrador AES-GCM para que use la librería AES con nuestra clave maestra (clave_maestra_K),
+        # con el modo de operación GCM, pasándole el nonce que acabamos de generar
+        cipher = Cipher(algorithms.AES(clave_maestra_K), modes.GCM(nonce), backend=default_backend())
+        encryptor = cipher.encryptor()
+
+        # Ciframos el texto plano
+        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+
+        # Obtenemos el 'tag' de autenticación
+        tag = encryptor.tag
+        # Concatenamos nonce, tag y el texto cifrado en un único bloque de bytes para almacenarlos juntos y lo codificamos todo en Base64 
+        # para convertir esos bytes en un string seguro que podemos guardar sin problemas en un archivo JSON
+        encrypted_data = base64.b64encode(nonce + tag + ciphertext).decode('utf-8')
+        
+        print("¡Cita cifrada con éxito!")
+        return encrypted_data
+
+    except Exception as e:
+        print(f"Error durante el cifrado de la cita: {e}")
+        return None
 
 def desencriptar_cita(usuario_autenticado:str ,clave_maestra_K:bytes, cita):
+    return
