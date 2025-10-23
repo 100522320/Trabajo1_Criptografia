@@ -64,6 +64,22 @@ def obtener_cita(usuario: str, fecha: datetime) -> str:
     # Si el usuario no tiene ninguna cita, devolvemos None
     return None
 
+def borrar_cita_json(usuario: str, fecha: datetime) -> bool:
+    # Elimina una cita del archivo JSON
+    try:
+        citas = load_citas()
+        if usuario in citas:
+            fecha_clave = fecha.isoformat()
+            if fecha_clave in citas[usuario]:
+                del citas[usuario][fecha_clave]
+                with open(CITAS_FILE, 'w') as f:
+                    json.dump(citas, f, indent=4)
+                return True
+        return False
+    except Exception as e:
+        print(f"Error al eliminar la cita de la base de datos: {e}")
+        return False
+
 def encriptar_cita(clave_maestra_K:bytes, motivo_cita: str) -> str:
     try:
         # Convertimos el motivo a texto plano
@@ -83,12 +99,12 @@ def encriptar_cita(clave_maestra_K:bytes, motivo_cita: str) -> str:
         # Concatenamos nonce, tag y el texto cifrado en un único bloque de bytes para almacenarlos juntos y lo codificamos todo en Base64 
         # para convertir esos bytes en un string seguro que podemos guardar sin problemas en un archivo JSON
         motivo_encriptado = base64.b64encode(nonce + tag + ciphertext).decode('utf-8')
-        print("¡Motivo de la cita cifrado con éxito!")
+        print("¡Cita cifrada con éxito!")
         
         return motivo_encriptado
 
     except Exception as e:
-        print(f"Error durante el cifrado o guardado de la cita: {e}")
+        print(f"Error durante el cifrado de la cita: {e}")
         return
 
 def desencriptar_cita(clave_maestra_K: bytes, motivo_cifrado: str) -> str | None:

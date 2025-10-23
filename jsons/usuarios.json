@@ -18,5 +18,10 @@
         "nombre_usuario": "adrian",
         "salt": "VKe828ckPvUUGTkayYQHag==",
         "hash": "hrUSnpynVrrK1JZ7dJTP6zZGh6qSWosiYyC2fFDKd1A="
+    },
+    "Tom\u00e1s": {
+        "nombre_usuario": "Tom\u00e1s",
+        "salt": "k3PXInGreHfjN6pK2CVvnQ==",
+        "hash": "Q5t0SzYZQs5YQI+J0fquCMWjkCzdWEjbSPWopPDmqbE="
     }
 }
