@@ -110,7 +110,7 @@ def crear_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     
 def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     # Pedimos la fecha de la cita a editar
-    fecha_str = input("¿En qué fecha y hora es la cita que desea editar? (DD/MM/YYYY hh:mm): ")
+    fecha_str = input("¿Qué fecha y hora tiene la cita que desea editar? (DD/MM/YYYY hh:mm): ")
     try:
         fecha_antigua = datetime.strptime(fecha_str, "%d/%m/%Y %H:%M")
     except ValueError:
