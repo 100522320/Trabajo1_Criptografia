@@ -88,7 +88,7 @@ def encriptar_cita(clave_maestra_K:bytes, motivo_cita: str) -> str:
         # Generamos un 'nonce' aleatorio
         nonce = os.urandom(LONGITUD_AES_NONCE)
 
-        # Ciframos el texto plano con un cifrador simétrico de flujo
+        # Ciframos el texto plano con un cifrador simétrico de bloques (AES-GCM)
         cifrador = Cipher(algorithms.AES(clave_maestra_K), modes.GCM(nonce), backend=default_backend())
         encriptador = cifrador.encryptor()
         ciphertext = encriptador.update(texto_plano) + encriptador.finalize()

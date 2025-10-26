@@ -2,7 +2,7 @@ from datetime import datetime
 import json # Para leer/escribir los datos de la cita cifrada
 # Utilidades para conversión
 import base64
-#importamos de crypto.py algunas funciones para encriptar y desciptar las citas
+#importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
 from crypto import encriptar_cita,desencriptar_cita,load_citas,guardar_cita, obtener_cita, borrar_cita_json
 
 
