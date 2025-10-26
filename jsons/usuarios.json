@@ -23,5 +23,10 @@
         "nombre_usuario": "Tom\u00e1s",
         "salt": "k3PXInGreHfjN6pK2CVvnQ==",
         "hash": "Q5t0SzYZQs5YQI+J0fquCMWjkCzdWEjbSPWopPDmqbE="
+    },
+    "Pablo": {
+        "nombre_usuario": "Pablo",
+        "salt": "aycd4Yt45IrUo5iZ90ICdA==",
+        "hash": "pBn/INvXPQeE0MK5mVRCh29Juhxy/FnpF7mMI+COvSY="
     }
 }

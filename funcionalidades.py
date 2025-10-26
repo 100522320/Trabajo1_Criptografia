@@ -116,11 +116,6 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     except ValueError:
         print("Formato de fecha incorrecto.")
         return
-    
-    # Comprobamos si la cita existe
-    if obtener_cita(usuario_autenticado, fecha_antigua) is None:
-        print("No se ha encontrado ninguna cita en esa fecha.")
-        return
         
     # Pedimos los nuevos datos
     print("--- Introduzca los nuevos datos de la cita ---")
@@ -131,11 +126,6 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     if not nueva_fecha_str and not nuevo_motivo:
         print("No se ha realizado ningún cambio.")
         return
-
-    # Eliminamos la cita antigua
-    if not borrar_cita_json(usuario_autenticado, fecha_antigua):
-        print("Error: No se pudo eliminar la cita antigua para actualizarla.")
-        return
         
     # Preparamos los nuevos datos y guardarlos
     fecha_final = fecha_antigua
@@ -145,12 +135,25 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
         except ValueError:
             print("Formato de nueva fecha incorrecto. Se cancela la edición.")
             return
+    
+    # Comprobamos si la cita existe y obtenemos el motivo cifrado antiguo antes de borrar nada
+    motivo_cifrado_antiguo = obtener_cita(usuario_autenticado, fecha_antigua)
+    if motivo_cifrado_antiguo is None:
+        print("No se ha encontrado ninguna cita en esa fecha.")
+        return
+    
+    # Eliminamos la cita antigua
+    if not borrar_cita_json(usuario_autenticado, fecha_antigua):
+        print("Error: No se pudo eliminar la cita antigua para actualizarla.")
+        return
 
     # Si no hay motivo nuevo, hay que descifrar el antiguo para volverlo a cifrar con la nueva fecha
     motivo_final = nuevo_motivo
     if not nuevo_motivo:
-        motivo_cifrado_antiguo = obtener_cita(usuario_autenticado, fecha_antigua)
         motivo_final = desencriptar_cita(clave_maestra_K, motivo_cifrado_antiguo)
+        if motivo_final is None:
+            print("\nError: No se pudo leer el motivo original de la cita. Edición cancelada.")
+            return
     
     # Ciframos y guardamos la "nueva" cita
     nuevo_motivo_cifrado = encriptar_cita(clave_maestra_K, motivo_final)
