@@ -51,7 +51,7 @@ LOG_FILENAME = 'seguridad.log'
 logger = logging.getLogger('SecureCitasCLI')
 logger.setLevel(logging.DEBUG)
 
-# 1. Handler para Archivo (DEBUG: guarda toda la información)
+# Handler para Archivo (DEBUG: guarda toda la información)
 file_handler = logging.FileHandler(LOG_FILENAME, mode='a', encoding='utf-8')
 file_handler.setLevel(logging.DEBUG)
 
