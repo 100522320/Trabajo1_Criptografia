@@ -35,19 +35,23 @@ def load_citas() -> dict:
         # Devuelve un diccionario vacío si el archivo no existe o no es JSON válido
         return {}
 
-def guardar_cita(usuario: str, fecha: datetime, motivo_encriptado: str) -> None:
-    # Guardamos los datos de la cita
-    citas = load_citas()
-    if usuario not in citas:
-        citas[usuario] = {}
-    
-    fecha_clave = fecha.isoformat()
-    
-    citas[usuario][fecha_clave] = motivo_encriptado
-    
-    with open(CITAS_FILE, 'w') as f:
-        json.dump(citas, f, indent=4)
-    return
+def guardar_cita(usuario: str, fecha: datetime, motivo_encriptado: str) -> bool:
+    try:
+        # Guardamos los datos de la cita
+        citas = load_citas()
+        if usuario not in citas:
+            citas[usuario] = {}
+        
+        fecha_clave = fecha.isoformat()
+        
+        citas[usuario][fecha_clave] = motivo_encriptado
+        
+        with open(CITAS_FILE, 'w') as f:
+            json.dump(citas, f, indent=4)
+        return True
+    except Exception as e:
+        print(f"Error al guardar la cita: {e}")
+        return False
 
 def obtener_cita(usuario: str, fecha: datetime) -> str:
     # Busca en el JSON una cita para un usuario y fecha específicos y devuelve el motivo cifrado (string en Base64) si lo encuentra
