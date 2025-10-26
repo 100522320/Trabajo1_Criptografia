@@ -1,5 +1,6 @@
 import os
 import json # Para leer/escribir users.json
+import logging #Importamos el módulo de logging
 
 # Para el hashing de la contraseña (Registro de usuario)
 from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
@@ -13,6 +14,9 @@ from cryptography.hazmat.backends import default_backend
 
 # Utilidades para conversión de bytes
 import base64
+
+#Obtener el logger configurado en main.py
+logger = logging.getLogger('SecureCitasCLI')
 
 #-----------------------------
 #        Configuracion 
@@ -38,18 +42,26 @@ def load_users() -> dict:
         with open(USERS_FILE, 'r') as f:
             # Intenta cargar los datos del archivo
             users = json.load(f)
-            # Asegura que lo cargado sea un diccionario (manejo de archivos mal formados)
+            # Asegura que lo cargado sea un diccionario
             if not isinstance(users, dict):
+                logger.warning(f"Archivo {USERS_FILE} corrupto o no es un diccionario.")
                 return {}
             return users
     except (FileNotFoundError, json.JSONDecodeError):
         # Devuelve un diccionario vacío si el archivo no existe o no es JSON válido
+        logger.warning(f"Archivo de usuarios no encontrado o JSON inválido: {USERS_FILE}. Creando uno nuevo.")
         return {}
 
-def hashear_contraseña(salt: str,contraseña: str) -> bytes | None:
+def hashear_contraseña(salt: bytes,contraseña: str) -> bytes | None:
     """
-    Recibe un salt y una contraseña y devuelve su hash
+    Recibe un salt (bytes) y una contraseña (str) y devuelve su hash
     """
+    # 1.Mensaje de depuración con el algoritmo y parámetros (Requisito 2)
+    logger.debug(
+        f"OPERACIÓN: Hashing de Contraseña | ALGORITMO: Argon2id "
+        f"| PARÁMETROS: Memoria={M_COST/1024/1024}MB, Tiempo={T_COST}, Paralelismo={P_COST}."
+    )
+    
     #Instanciar la Función de Derivación de Clave (KDF) Argon2id
     kdf = Argon2id(
         salt=salt,
@@ -64,8 +76,12 @@ def hashear_contraseña(salt: str,contraseña: str) -> bytes | None:
     try:
         contraseña_bytes = contraseña.encode('utf-8')
         contraseña_hash = kdf.derive(contraseña_bytes)
+        
+        # Mensaje de depuración con el resultado (el hash, truncado)
+        logger.debug(f"RESULTADO DEL HASH: {base64.b64encode(contraseña_hash).decode('utf-8')} Bytes: {len(contraseña_hash)}.")
+        
     except Exception as e:
-        print(f"Error durante el hasheo de la contraseña: {e}")
+        logger.error(f"Error durante el hasheo de la contraseña: {e}")
         return None
     
     return contraseña_hash
@@ -77,7 +93,8 @@ def registrar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     """
     # 1.Generamos el salt
     salt = os.urandom(SALT_LENGTH)
-
+    logger.debug(f"Salt aleatorio generado para '{nombre_usuario}': {salt} ({SALT_LENGTH} bytes).")
+    
     # 2. Hashear la contraseña
     contraseña_hash = hashear_contraseña(salt,contraseña)
     if not contraseña_hash:
@@ -98,7 +115,8 @@ def registrar_usuario(nombre_usuario: str, contraseña: str) -> bool:
 
     # Verificar si el usuario ya existe
     if nombre_usuario in users:
-        print(f"Error: El usuario '{nombre_usuario}' ya existe.")
+        logger.warning(f"Error de registro: El usuario '{nombre_usuario}' ya existe.")
+        print("Este usuario ya existe. Por favor inicie sesion.")
         return False
        
     # 5. Almacenar el nombre de usuario y los datos en el diccionario de usuarios
@@ -108,10 +126,10 @@ def registrar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     try:
         with open(USERS_FILE, 'w') as f:
             json.dump(users, f, indent=4)
-        print(f"Éxito: Usuario '{nombre_usuario}' registrado.")
+        logger.info(f"Éxito: Usuario '{nombre_usuario}' registrado y almacenado.")
         return True
     except Exception as e:
-        print(f"Error al escribir en el archivo {USERS_FILE}: {e}")
+        logger.error(f"Error al escribir en el archivo {USERS_FILE}: {e}")
         return False
    
 def autenticar_usuario(nombre_usuario: str, contraseña: str) -> bool:
@@ -122,7 +140,7 @@ def autenticar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     # 1. Buscamos al usuario en el json de usuarios
     users = load_users()
     if nombre_usuario not in users:
-        print(f"Fallo de autenticación: Usuario '{nombre_usuario}' no existe.")
+        logger.warning(f"Fallo de autenticación: Usuario '{nombre_usuario}' no existe.")
         return False
     
     # 2. Tomamos sus datos (salt y hash como cadenas Base64)
@@ -130,7 +148,7 @@ def autenticar_usuario(nombre_usuario: str, contraseña: str) -> bool:
         salt_bytes = base64.b64decode(users[nombre_usuario]["salt"])
         hash_almacenado = base64.b64decode(users[nombre_usuario]["hash"])
     except Exception as e:
-        print(f"Error al decodificar Base64 de credenciales: {e}")
+        logger.error(f"Error al decodificar Base64 de credenciales: {e}")
         return False
 
     # 3. Instanciar el KDF con el salt recuperado y los parámetros originales
@@ -145,23 +163,26 @@ def autenticar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     
     # 4. Usar el método verify() para hashear la contraseña introducida 
     # y compararla de forma segura con el hash almacenado.
+    logger.debug(f"OPERACIÓN: Verificación de Contraseña | ALGORITMO: Argon2id."
+                f"| PARÁMETROS: Memoria={M_COST/1024/1024}MB, Tiempo={T_COST}, Paralelismo={P_COST}.")
+    
     try:
         contraseña_bytes = contraseña.encode('utf-8')
         kdf.verify(contraseña_bytes, hash_almacenado)
         # Si verify() no lanza una excepción, la autenticación es exitosa.
-
+        
+        logger.info(f"Éxito de autenticación para '{nombre_usuario}'.")
         return True 
         
     except InvalidKey:
         # Esto ocurre cuando la contraseña introducida es incorrecta.
-        print(f"Fallo de autenticación: Contraseña incorrecta para '{nombre_usuario}'.")
+        logger.warning(f"Fallo de autenticación: Contraseña incorrecta para '{nombre_usuario}'.")
         return False
         
     except Exception as e:
         # Otros errores durante el proceso de verificación.
-        print(f"Error inesperado durante la verificación: {e}")
+        logger.error(f"Error inesperado durante la verificación: {e}")
         return False
-
 
 
 def derivar_clave(contraseña_maestra: str, usuario_autenticado: str)-> bytes | None:
@@ -176,7 +197,7 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str)-> bytes | 
     try:    
         salt_bytes = base64.b64decode(users[usuario_autenticado]["salt"])
     except Exception as e:
-        print(f"Error al decodificar Base64 del salt para la derivación: {e}")
+        logger.error(f"Error al decodificar Base64 del salt para la derivación: {e}")
         return None
     
     # 2. Instanciar el KDF (Key Derivation Function) PBKDF2HMAC
@@ -188,14 +209,22 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str)-> bytes | 
         iterations=PBKDF2_ITERATIONS,
         backend=default_backend()
     )
-
+    
+    # AÑADIDO: Mensaje de depuración con el algoritmo y la longitud de clave (Requisito 2)
+    logger.debug(
+        f"OPERACIÓN: Derivación de Clave Simétrica K | ALGORITMO: PBKDF2HMAC(SHA256) "
+        f"| LONGITUD DE CLAVE FINAL: {KEY_K_LENGTH * 8} bits | ITERACIONES: {PBKDF2_ITERATIONS}."
+    )
+    
     # 3. Derivar la clave K
     try:
         contraseña_bytes = contraseña_maestra.encode('utf-8')
         clave_K = kdf.derive(contraseña_bytes)
-        print(f"DEBUG: Clave K derivada ({KEY_K_LENGTH*8} bits).")
+        
+        logger.info(f"Éxito: Clave Maestra K derivada, {clave_K} ({KEY_K_LENGTH*8} bits).")
+        
         return clave_K
         
     except Exception as e:
-        print(f"Error durante la derivación de clave con PBKDF2HMAC: {e}")
+        logger.error(f"Error durante la derivación de clave con PBKDF2HMAC: {e}")
         return None

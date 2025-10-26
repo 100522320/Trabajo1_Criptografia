@@ -28,5 +28,15 @@
         "nombre_usuario": "Pablo",
         "salt": "aycd4Yt45IrUo5iZ90ICdA==",
         "hash": "pBn/INvXPQeE0MK5mVRCh29Juhxy/FnpF7mMI+COvSY="
+    },
+    "chris": {
+        "nombre_usuario": "chris",
+        "salt": "ms/Vui53xsaCKPOBju0g4g==",
+        "hash": "p6hprTHYspyfAC4bq2n3QHgym1nTVf8hkOXDJUE6x34="
+    },
+    "ccccc": {
+        "nombre_usuario": "ccccc",
+        "salt": "nWpXaE82uQ2ebrtAbAXJMA==",
+        "hash": "lhSXh0mJd9oYU9dwtvGOF/LCt5l3mlJaEe2bybgvrBI="
     }
 }

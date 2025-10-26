@@ -2,6 +2,7 @@ import sys
 import re
 import os
 import getpass #para que no se lea la contraseña
+import logging # AÑADIDO: Importamos el módulo de logging
 
 # =============================================================================
 # ACTIVACIÓN AUTOMÁTICA DEL VENV - COMPATIBLE CON TODOS LOS SISTEMAS
@@ -39,6 +40,32 @@ def setup_venv():
 if not setup_venv():
     print("AVISO: No se encontró el venv, usando Python del sistema")
 
+# =============================================================================
+# CONFIGURACIÓN DEL SISTEMA DE LOGGING
+# La práctica pide mostrar el resultado en un log o mensaje de depuración junto
+# con el algoritmo y la longitud de clave.
+# =============================================================================
+LOG_FILENAME = 'seguridad.log'
+
+# Crear el logger principal y configurar el nivel más bajo (DEBUG)
+logger = logging.getLogger('SecureCitasCLI')
+logger.setLevel(logging.DEBUG)
+
+# 1. Handler para Archivo (DEBUG: guarda toda la información)
+file_handler = logging.FileHandler(LOG_FILENAME, mode='a', encoding='utf-8')
+file_handler.setLevel(logging.DEBUG)
+
+# Formato del log (hora, nivel, nombre del módulo, mensaje)
+formatter = logging.Formatter(
+    '[%(asctime)s] - %(levelname)s - %(name)s - %(message)s'
+)
+file_handler.setFormatter(formatter)
+
+# Evitar añadir handlers múltiples veces
+if not logger.handlers:
+    logger.addHandler(file_handler)
+
+logger.debug("Sistema de logging 'SecureCitasCLI' inicializado.")
 # =============================================================================
 
 # Importa las funciones que deben estar definidas en auth.py
@@ -110,14 +137,17 @@ def menu_principal():
             contraseña_repetir = getpass.getpass("Repite la contraseña: ").strip()
            
             if not nombre_usuario or not contraseña or not contraseña_repetir:
+                logger.warning("Intento de registro con campos vacíos.")
                 print("El usuario y las contraseñas no pueden estar vacíos. Inténtalo de nuevo.")
                 continue
 
             if not contraseñas_iguales(contraseña,contraseña_repetir):
+                logger.warning("Fallo de registro: Contraseñas no coinciden.")
                 print("Las contraseñas deben ser iguales. Inténtalo de nuevo.")
                 continue
 
             if not contraseña_robusta(contraseña):
+                logger.warning("Fallo de registro: Contraseña no robusta.")
                 print("La contraseña debe ser de minimo 8 caracteres, con 1 numero y 1 mayuscula. Inténtalo de nuevo.")
                 continue
 
@@ -134,6 +164,7 @@ def menu_principal():
             contraseña = getpass.getpass("Contraseña: ").strip()
            
             if not nombre_usuario or not contraseña:
+                logger.warning("Intento de login con campos vacíos.")
                 print("El usuario y la contraseña no pueden estar vacíos. Inténtalo de nuevo.")
                 continue
            
@@ -144,6 +175,7 @@ def menu_principal():
             
                
         elif opcion in ['salir', 'exit', 'q']:
+            logger.info("El usuario ha salido de la aplicación.")
             print("Saliendo de la aplicación.")
             sys.exit(0)
            
@@ -155,20 +187,19 @@ def main():
     Punto de entrada principal de la aplicación.
     Controla el flujo desde la autenticación hasta la lógica principal.
     """
-    print("--- SecureCitas CLI - Gestor de Citas Cifradas ---")
+    print("--- SecureCitas CLI - Gestor de citas medicas cifradas ---")
    
     try:
         # 1. Gestionar la autenticación/registro
         usuario_autenticado, contraseña_maestra = menu_principal()
 
         # 2. Derivar la clave simétrica K usando la contraseña y el salt
-        print("\n--- DERIVANDO CLAVE MAESTRA ---")
         clave_maestra_K = derivar_clave(contraseña_maestra, usuario_autenticado)
 
         if not clave_maestra_K:
+            logger.critical("No se pudo derivar la clave K. Saliendo.")
+            print("Ha ocurrido un error en el sistema.")
             return
-        
-        print(f"\nUsuario '{usuario_autenticado}' listo para operar con la clave K.\n")
 
         # 3. Iniciar la lógica de la aplicación
         aplicacion(usuario_autenticado,clave_maestra_K)
@@ -181,6 +212,7 @@ def main():
         # Captura la salida si el usuario usa 'q' o 'salir' en el menú.
         pass
     except Exception as e:
+        logger.fatal(f"\nHa ocurrido un error fatal: {e}", exc_info=True)
         print(f"\nHa ocurrido un error fatal: {e}")
 
 

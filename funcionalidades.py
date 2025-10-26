@@ -1,9 +1,13 @@
 from datetime import datetime
 import json # Para leer/escribir los datos de la cita cifrada
+import logging # AÑADIDO: Importamos el módulo de logging
 # Utilidades para conversión
 import base64
 #importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
 from crypto import encriptar_cita,desencriptar_cita,load_citas,guardar_cita, obtener_cita, borrar_cita_json
+
+# AÑADIDO: Obtener el logger configurado en main.py
+logger = logging.getLogger('SecureCitasCLI')
 
 
 def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
@@ -32,6 +36,7 @@ def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
                 eliminar_cita(usuario_autenticado)
             case '5':
                 #solo salimos del bucle cuando el usuario lo indique
+                logger.info("El usuario ha salido de la aplicación.")
                 print("Que tenga un buen dia.")
                 return
             case _:
@@ -45,6 +50,7 @@ def ver_citas_pendientes(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     '''
     citas = load_citas()
     if usuario_autenticado not in citas or not citas[usuario_autenticado]:
+        logger.info(f"Usuario {usuario_autenticado} no tiene citas guardadas.")
         print("\nNo tiene ninguna cita guardada.")
         return
 
@@ -60,10 +66,11 @@ def ver_citas_pendientes(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
             if motivo_descifrado:
                 citas_pendientes.append((fecha_cita, motivo_descifrado))
             else:
-                # Si falla el descifrado, lo indicamos
+                # Si falla el descifrado, lo indicamos (el error se loguea en crypto.py)
                 citas_pendientes.append((fecha_cita, "[ERROR AL LEER MOTIVO]"))
 
     if not citas_pendientes:
+        logger.info(f"Usuario {usuario_autenticado} no tiene citas pendientes.")
         print("No tiene citas pendientes.")
         return
 
@@ -84,17 +91,20 @@ def crear_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     try:
         fecha = datetime.strptime(fecha_str, "%d/%m/%Y %H:%M")
     except ValueError:
+        logger.warning("Error de formato de fecha en creación de cita.")
         print("\nError: El formato de la fecha no es correcto. Use DD/MM/YYYY hh:mm.")
         return
 
     #La unica fecha imposible será anterior o igual a ahora, las demas las damos como buenas
     if fecha <= datetime.now():
+        logger.warning(f"Intento de crear cita en fecha pasada: {fecha.isoformat()}")
         print("La fecha introducida no es valida (ya ha pasado). Porfavor intentelo de nuevo.")
         return
     
     # Motivo de la cita (lo que se va a cifrar)
     motivo = input("Introduzca el motivo de la cita: ").strip()
     if not motivo:
+        logger.warning("Intento de crear cita con motivo vacío.")
         print("El motivo no puede estar vacío.")
         return
     
@@ -104,6 +114,7 @@ def crear_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
         guardar_cita(usuario_autenticado, fecha, motivo_cifrado)
         print("\n¡Cita guardada con éxito!")
     else:
+        logger.error(f"Fallo al cifrar la cita para {usuario_autenticado}.")
         print("\nError: No se pudo cifrar la cita.")
 
     return
@@ -114,6 +125,7 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     try:
         fecha_antigua = datetime.strptime(fecha_str, "%d/%m/%Y %H:%M")
     except ValueError:
+        logger.warning("Formato de fecha antigua incorrecto.")
         print("Formato de fecha incorrecto.")
         return
         
@@ -133,25 +145,30 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
         try:
             fecha_final = datetime.strptime(nueva_fecha_str, "%d/%m/%Y %H:%M")
         except ValueError:
+            logger.warning("Formato de nueva fecha incorrecto.")
             print("Formato de nueva fecha incorrecto. Se cancela la edición.")
             return
     
     # Comprobamos si la cita existe y obtenemos el motivo cifrado antiguo antes de borrar nada
     motivo_cifrado_antiguo = obtener_cita(usuario_autenticado, fecha_antigua)
     if motivo_cifrado_antiguo is None:
+        logger.warning(f"Intento de editar cita no encontrada para {usuario_autenticado} en {fecha_antigua.isoformat()}")
         print("No se ha encontrado ninguna cita en esa fecha.")
         return
     
     # Eliminamos la cita antigua
     if not borrar_cita_json(usuario_autenticado, fecha_antigua):
+        logger.error("Error crítico al intentar eliminar la cita antigua para edición.")
         print("Error: No se pudo eliminar la cita antigua para actualizarla.")
         return
 
     # Si no hay motivo nuevo, hay que descifrar el antiguo para volverlo a cifrar con la nueva fecha
     motivo_final = nuevo_motivo
     if not nuevo_motivo:
+        logger.debug("Descifrando motivo antiguo para re-cifrarlo con nueva fecha/hora.")
         motivo_final = desencriptar_cita(clave_maestra_K, motivo_cifrado_antiguo, fecha_final)
         if motivo_final is None:
+            logger.error("Fallo al descifrar el motivo original durante la edición.")
             print("\nError: No se pudo leer el motivo original de la cita. Edición cancelada.")
             return
     
@@ -159,7 +176,9 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     nuevo_motivo_cifrado = encriptar_cita(clave_maestra_K, motivo_final)
     if nuevo_motivo_cifrado and guardar_cita(usuario_autenticado, fecha_final, nuevo_motivo_cifrado):
         print("\n¡Cita editada con éxito!")
+        logger.info(f"Cita editada con éxito para {usuario_autenticado}.")
     else:
+        logger.error(f"Fallo al guardar los cambios de la cita para {usuario_autenticado}.")
         print("\nError: Hubo un problema al guardar los cambios de la cita.")
 
 
@@ -169,11 +188,13 @@ def eliminar_cita(usuario_autenticado:str)-> None:
     try:
         fecha_a_eliminar = datetime.strptime(fecha_str, "%d/%m/%Y %H:%M")
     except ValueError:
+        logger.warning("Formato de fecha incorrecto para eliminación.")
         print("Formato de fecha incorrecto.")
         return
         
     # Intentamos borrar la cita
     if borrar_cita_json(usuario_autenticado, fecha_a_eliminar):
         print("\n¡Cita eliminada con éxito!")
+        logger.info(f"Cita eliminada exitosamente para {usuario_autenticado} en {fecha_a_eliminar.isoformat()}.")
     else:
         print("\nNo se ha encontrado ninguna cita en esa fecha o hubo un error al eliminarla.")
