@@ -13,7 +13,7 @@ def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     """
 
     while True:
-        print("Cosas que puede hacer:")
+        print("\nCosas que puede hacer:")
         print("1.Ver mis citas pendientes")
         print("2.Crear cita")
         print("3.Editar cita")
