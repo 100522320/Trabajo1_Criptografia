@@ -199,5 +199,3 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str)-> bytes | 
     except Exception as e:
         print(f"Error durante la derivación de clave con PBKDF2HMAC: {e}")
         return None
-
-

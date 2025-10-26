@@ -125,10 +125,10 @@ def desencriptar_cita(clave_maestra_K: bytes, motivo_cifrado: str) -> str | None
 
         # Configuramos el descifrador con el algoritmo (AES), la clave, y el modo GCM y le pasamos el nonce y el tag que hemos extraído
         cifrador = Cipher(algorithms.AES(clave_maestra_K), modes.GCM(nonce, tag), backend=default_backend())
-        descifrador = cifrador.decryptor()
+        desencriptador = cifrador.decryptor()
 
         # Ejecutamos el descifrado. La librería verificará automáticamente si el tag es correcto
-        texto_plano = descifrador.update(motivo_cifrado) + descifrador.finalize()
+        texto_plano = desencriptador.update(motivo_cifrado) + desencriptador.finalize()
         
         # Si la verificación ha sido exitosa, convertimos los bytes del texto plano a un string, que será el motivo descifrado
         return texto_plano.decode('utf-8')
