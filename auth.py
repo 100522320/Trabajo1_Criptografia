@@ -93,7 +93,7 @@ def registrar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     """
     # 1.Generamos el salt
     salt = os.urandom(SALT_LENGTH)
-    logger.debug(f"Salt aleatorio generado para '{nombre_usuario}': {salt} ({SALT_LENGTH} bytes).")
+    logger.debug(f"Salt aleatorio generado para '{nombre_usuario}': {base64.b64encode(salt).decode('utf-8')} ({SALT_LENGTH} bytes).")
     
     # 2. Hashear la contraseña
     contraseña_hash = hashear_contraseña(salt,contraseña)
@@ -221,7 +221,7 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str)-> bytes | 
         contraseña_bytes = contraseña_maestra.encode('utf-8')
         clave_K = kdf.derive(contraseña_bytes)
         
-        logger.info(f"Éxito: Clave Maestra K derivada, {clave_K} ({KEY_K_LENGTH*8} bits).")
+        logger.info(f"Éxito: Clave Maestra K derivada, {base64.b64encode(clave_K).decode('utf-8')} ({KEY_K_LENGTH*8} bits).")
         
         return clave_K
         

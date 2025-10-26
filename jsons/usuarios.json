@@ -38,5 +38,15 @@
         "nombre_usuario": "ccccc",
         "salt": "nWpXaE82uQ2ebrtAbAXJMA==",
         "hash": "lhSXh0mJd9oYU9dwtvGOF/LCt5l3mlJaEe2bybgvrBI="
+    },
+    "pepe": {
+        "nombre_usuario": "pepe",
+        "salt": "E38KGbXTnFGi5I7Fc4KCHw==",
+        "hash": "mm+lNPNRLWqQvum2JX7jvqPK4QFRy3BPRx/FoOclIkU="
+    },
+    "dfgdfgd": {
+        "nombre_usuario": "dfgdfgd",
+        "salt": "1lHEFfYfqG7TL96zNKn5Ng==",
+        "hash": "KVfVpwZD+43CMm2iP4I1YaT6lUL6/2VH3NCKoIo+wB4="
     }
 }
