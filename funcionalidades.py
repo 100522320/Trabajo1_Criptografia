@@ -56,7 +56,7 @@ def ver_citas_pendientes(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
         fecha_cita = datetime.fromisoformat(fecha_str)
         if fecha_cita >= datetime.now():
             # Desciframos el motivo
-            motivo_descifrado = desencriptar_cita(clave_maestra_K, motivo_cifrado)
+            motivo_descifrado = desencriptar_cita(clave_maestra_K, motivo_cifrado, fecha_cita)
             if motivo_descifrado:
                 citas_pendientes.append((fecha_cita, motivo_descifrado))
             else:
@@ -150,7 +150,7 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     # Si no hay motivo nuevo, hay que descifrar el antiguo para volverlo a cifrar con la nueva fecha
     motivo_final = nuevo_motivo
     if not nuevo_motivo:
-        motivo_final = desencriptar_cita(clave_maestra_K, motivo_cifrado_antiguo)
+        motivo_final = desencriptar_cita(clave_maestra_K, motivo_cifrado_antiguo, fecha_final)
         if motivo_final is None:
             print("\nError: No se pudo leer el motivo original de la cita. Edición cancelada.")
             return

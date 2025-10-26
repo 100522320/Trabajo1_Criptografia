@@ -111,11 +111,7 @@ def encriptar_cita(clave_maestra_K:bytes, motivo_cita: str) -> str:
         print(f"Error durante el cifrado de la cita: {e}")
         return
 
-def desencriptar_cita(clave_maestra_K: bytes, motivo_cifrado: str) -> str | None:
-    """
-    Descifra el motivo de una cita cifrada con AES-265-GCM.
-    Devuelve el string del motivo si es exitoso, None si falla.
-    """
+def desencriptar_cita(clave_maestra_K: bytes, motivo_cifrado: str, fecha: datetime) -> str | None:
     try:
         # Decodificamos la cadena de texto Base64 para obtener el bloque de bytes original
         bytes_motivo_encriptado = base64.b64decode(motivo_cifrado.encode('utf-8'))
@@ -139,7 +135,7 @@ def desencriptar_cita(clave_maestra_K: bytes, motivo_cifrado: str) -> str | None
 
     # Si la verificación del tag falla, se captura la excepción y se informa del error
     except InvalidTag:
-        print("¡ERROR DE AUTENTICACIÓN! La cita podría haber sido manipulada.")
+        print(f"¡ERROR DE AUTENTICACIÓN! La cita con fecha {fecha.strftime('%d/%m/%Y a las %H:%M')} podría haber sido manipulada.")
         return None
     # Capturamos cualquier otro posible error durante el proceso
     except Exception as e:
