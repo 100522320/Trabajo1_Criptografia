@@ -128,6 +128,13 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
         logger.warning("Formato de fecha antigua incorrecto.")
         print("Formato de fecha incorrecto.")
         return
+    
+    # Comprobamos si la cita existe y obtenemos el motivo cifrado antiguo antes de borrar nada
+    motivo_cifrado_antiguo = obtener_cita(usuario_autenticado, fecha_antigua)
+    if motivo_cifrado_antiguo is None:
+        logger.warning(f"Intento de editar cita no encontrada para {usuario_autenticado} en {fecha_antigua.isoformat()}")
+        print("No se ha encontrado ninguna cita en esa fecha.")
+        return
         
     # Pedimos los nuevos datos
     print("--- Introduzca los nuevos datos de la cita ---")
@@ -148,13 +155,6 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
             logger.warning("Formato de nueva fecha incorrecto.")
             print("Formato de nueva fecha incorrecto. Se cancela la edición.")
             return
-    
-    # Comprobamos si la cita existe y obtenemos el motivo cifrado antiguo antes de borrar nada
-    motivo_cifrado_antiguo = obtener_cita(usuario_autenticado, fecha_antigua)
-    if motivo_cifrado_antiguo is None:
-        logger.warning(f"Intento de editar cita no encontrada para {usuario_autenticado} en {fecha_antigua.isoformat()}")
-        print("No se ha encontrado ninguna cita en esa fecha.")
-        return
     
     # Eliminamos la cita antigua
     if not borrar_cita_json(usuario_autenticado, fecha_antigua):
