@@ -5,8 +5,7 @@ import logging # AÑADIDO: Importamos el módulo de logging
 import base64
 #importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
 from crypto import encriptar_cita,desencriptar_cita,load_citas,guardar_cita, obtener_cita, borrar_cita_json
-
-# AÑADIDO: Obtener el logger configurado en main.py
+#Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
 
 

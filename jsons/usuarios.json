@@ -48,5 +48,10 @@
         "nombre_usuario": "dfgdfgd",
         "salt": "1lHEFfYfqG7TL96zNKn5Ng==",
         "hash": "KVfVpwZD+43CMm2iP4I1YaT6lUL6/2VH3NCKoIo+wB4="
+    },
+    "c": {
+        "nombre_usuario": "c",
+        "salt": "LqSEVchf0LoiMNo3Onj1yg==",
+        "hash": "/EfTE7OyE61KNkB38AJCo95rXw+gthZgEZejupsNRTo="
     }
 }

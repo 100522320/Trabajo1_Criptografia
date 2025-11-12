@@ -2,7 +2,7 @@ import sys
 import re
 import os
 import getpass #para que no se lea la contraseña
-import logging # AÑADIDO: Importamos el módulo de logging
+import logging #Importamos el módulo de logging
 
 # =============================================================================
 # ACTIVACIÓN AUTOMÁTICA DEL VENV - COMPATIBLE CON TODOS LOS SISTEMAS
