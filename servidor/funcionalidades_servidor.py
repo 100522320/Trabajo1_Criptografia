@@ -12,7 +12,7 @@ from crypto_servidor import (
     encriptar_mensaje, desencriptar_mensaje
 )
 from auth import registrar_usuario, autenticar_usuario, derivar_clave
-from crypto_servidor import guardar_cita_servidor, obtener_cita, borrar_cita_json, load_citas
+from crypto_servidor import guardar_cita, obtener_cita, borrar_cita_json, load_citas
 
 # AÑADIDO: Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
@@ -66,7 +66,7 @@ class Servidor:
             elif cmd == "GUARDAR_CITA":
                 usuario, fecha_iso, motivo_cifrado = partes[1], partes[2], partes[3]
                 fecha = datetime.fromisoformat(fecha_iso)
-                exito = guardar_cita_servidor(usuario, fecha, motivo_cifrado)
+                exito = guardar_cita(usuario, fecha, motivo_cifrado)
                 return "CITA_GUARDADA" if exito else "ERROR_GUARDAR_CITA"
                 
             elif cmd == "OBTENER_CITAS":
@@ -99,14 +99,18 @@ class Servidor:
         clave_sesion = None
         
         try:
-            # Fase 1: Negociación de clave
+            # FASE 1: Negociación de clave (siempre comienza así)
             comando_negociacion = client_socket.recv(4096).decode('utf-8')
+            logger.info(f"Fase 1 - Negociación recibida: {comando_negociacion[:100]}...")
+            
             if comando_negociacion.startswith("INICIAR_NEGOCIACION|"):
                 respuesta = self.procesar_comando(comando_negociacion)
                 client_socket.send(respuesta.encode('utf-8'))
                 
-                # Fase 2: Recibir clave de sesión cifrada
+                # FASE 2: Recibir clave de sesión cifrada
                 comando_clave = client_socket.recv(4096).decode('utf-8')
+                logger.info(f"Fase 2 - Clave sesión recibida: {comando_clave[:100]}...")
+                
                 if comando_clave.startswith("CLAVE_SESION_CIFRADA|"):
                     respuesta = self.procesar_comando(comando_clave)
                     client_socket.send(respuesta.encode('utf-8'))
@@ -117,39 +121,53 @@ class Servidor:
                     clave_sesion_b64 = desencriptar_asimetrico(clave_sesion_cifrada)
                     if clave_sesion_b64:
                         clave_sesion = base64.b64decode(clave_sesion_b64)
+                        logger.info(f"Clave de sesión establecida: {len(clave_sesion)} bytes")
+                    else:
+                        logger.error("Error extrayendo clave de sesión")
+                        return
+                else:
+                    logger.error("Formato de clave de sesión incorrecto")
+                    return
+            else:
+                logger.error("No comenzó con negociación")
+                return
             
-            # Fase 3: Comunicación normal cifrada
+            # FASE 3: Comunicación normal cifrada
+            logger.info("Iniciando comunicación cifrada...")
             while True:
                 comando_cifrado = client_socket.recv(4096).decode('utf-8')
                 if not comando_cifrado:
+                    logger.info("Cliente desconectado")
                     break
                     
-                # Descifrar comando si tenemos clave de sesión
-                if clave_sesion:
-                    comando = desencriptar_mensaje(clave_sesion, comando_cifrado)
-                    if not comando:
-                        client_socket.send("ERROR_DESCIFRADO".encode('utf-8'))
-                        continue
-                else:
-                    comando = comando_cifrado
+                logger.debug(f"Comando cifrado recibido: {comando_cifrado[:50]}...")
                 
-                logger.info(f"📨 Comando recibido: {comando}")
+                # Descifrar comando
+                comando = desencriptar_mensaje(clave_sesion, comando_cifrado)
+                if not comando:
+                    logger.error("Error descifrando comando")
+                    client_socket.send("ERROR_DESCIFRADO".encode('utf-8'))
+                    continue
+                
+                logger.info(f"Comando descifrado: {comando}")
+                
                 respuesta = self.procesar_comando(comando)
+                logger.info(f"Respuesta generada: {respuesta}")
                 
-                # Cifrar respuesta si tenemos clave de sesión
-                if clave_sesion:
-                    respuesta_cifrada = encriptar_mensaje(clave_sesion, respuesta)
-                    if respuesta_cifrada:
-                        client_socket.send(respuesta_cifrada.encode('utf-8'))
-                    else:
-                        client_socket.send("ERROR_CIFRADO".encode('utf-8'))
+                # Cifrar respuesta
+                respuesta_cifrada = encriptar_mensaje(clave_sesion, respuesta)
+                if respuesta_cifrada:
+                    client_socket.send(respuesta_cifrada.encode('utf-8'))
+                    logger.debug("Respuesta enviada cifrada")
                 else:
-                    client_socket.send(respuesta.encode('utf-8'))
-                    
+                    client_socket.send("ERROR_CIFRADO".encode('utf-8'))
+                    logger.error("Error cifrando respuesta")
+                        
         except Exception as e:
             logger.error(f"Error con cliente: {e}")
         finally:
             client_socket.close()
+            logger.info("Conexión cerrada")
 
     def iniciar(self):
         """Inicia el servidor"""

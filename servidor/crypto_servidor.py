@@ -144,12 +144,16 @@ def desencriptar_asimetrico(mensaje_cifrado: str) -> str:
 def encriptar_mensaje(clave: bytes, mensaje: str) -> str:
     """Cifra un mensaje para comunicación segura con el cliente"""
     try:
-        nonce = os.urandom(12)
+        nonce = os.urandom(LONGITUD_AES_NONCE)
         cifrador = Cipher(algorithms.AES(clave), modes.GCM(nonce), backend=default_backend())
         encriptador = cifrador.encryptor()
         texto_cifrado = encriptador.update(mensaje.encode('utf-8')) + encriptador.finalize()
         tag = encriptador.tag
-        return base64.b64encode(nonce + tag + texto_cifrado).decode('utf-8')
+        
+        resultado = base64.b64encode(nonce + tag + texto_cifrado).decode('utf-8')
+        logger.debug(f"Mensaje cifrado. Longitud original: {len(mensaje)}, longitud cifrada: {len(resultado)}")
+        return resultado
+        
     except Exception as e:
         logger.error(f"Error durante el cifrado del mensaje: {e}")
         return None
@@ -158,9 +162,9 @@ def desencriptar_mensaje(clave: bytes, mensaje_cifrado: str) -> str:
     """Descifra un mensaje recibido del cliente"""
     try:
         datos = base64.b64decode(mensaje_cifrado.encode('utf-8'))
-        nonce = datos[:12]
-        tag = datos[12:28]
-        texto_cifrado = datos[28:]
+        nonce = datos[:LONGITUD_AES_NONCE]
+        tag = datos[LONGITUD_AES_NONCE:LONGITUD_AES_NONCE + 16]
+        texto_cifrado = datos[LONGITUD_AES_NONCE + 16:]
         
         cifrador = Cipher(algorithms.AES(clave), modes.GCM(nonce, tag), backend=default_backend())
         desencriptador = cifrador.decryptor()

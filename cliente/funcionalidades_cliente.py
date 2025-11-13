@@ -23,6 +23,7 @@ class ClienteAPI:
         self.clave_comunicacion = None
         self.clave_privada = None
         self.clave_publica_servidor = None
+        self.socket = None  # Socket persistente
         
     def establecer_claves(self, clave_privada, clave_publica_servidor):
         self.clave_privada = clave_privada
@@ -31,146 +32,262 @@ class ClienteAPI:
     def establecer_clave_comunicacion(self, clave: bytes):
         self.clave_comunicacion = clave
         
+    def conectar(self):
+        """Establece una conexión persistente con el servidor"""
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((self.host, self.port))
+            logger.info("Conexión establecida con el servidor")
+            return True
+        except Exception as e:
+            logger.error(f"Error al conectar: {e}")
+            return False
+    
+    def desconectar(self):
+        """Cierra la conexión con el servidor"""
+        if self.socket:
+            try:
+                self.socket.close()
+                logger.info("Conexión cerrada")
+            except:
+                pass
+            self.socket = None
+        
     def negociar_clave_segura(self):
         """Negocia una clave de comunicación segura usando cifrado asimétrico"""
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((self.host, self.port))
-                
-                # 1. Cliente genera par de claves
-                self.clave_privada, clave_publica_cliente = generar_par_claves()
-                clave_publica_cliente_bytes = serializar_clave_publica(clave_publica_cliente)
-                
-                # 2. Enviar clave pública al servidor
-                sock.send(b"INICIAR_NEGOCIACION|" + clave_publica_cliente_bytes)
-                
-                # 3. Recibir clave pública del servidor
-                respuesta = sock.recv(4096)
-                if b"CLAVE_PUBLICA_SERVIDOR|" in respuesta:
-                    partes = respuesta.split(b"|", 1)
-                    clave_publica_servidor_bytes = partes[1]
-                    self.clave_publica_servidor = deserializar_clave_publica(clave_publica_servidor_bytes)
-                    
-                    # 4. Generar y enviar clave de sesión cifrada con la clave pública del servidor
-                    clave_sesion = os.urandom(32)  # 256 bits para AES
-                    clave_sesion_cifrada = encriptar_asimetrico(self.clave_publica_servidor, base64.b64encode(clave_sesion).decode('utf-8'))
-                    
-                    if clave_sesion_cifrada:
-                        sock.send(f"CLAVE_SESION_CIFRADA|{clave_sesion_cifrada}".encode('utf-8'))
-                        
-                        # 5. Recibir confirmación
-                        confirmacion = sock.recv(1024).decode('utf-8')
-                        if confirmacion == "NEGOCIACION_EXITOSA":
-                            self.establecer_clave_comunicacion(clave_sesion)
-                            return True
-                
+            # Conectar al servidor
+            if not self.conectar():
                 return False
+            
+            # 1. Cliente genera par de claves
+            self.clave_privada, clave_publica_cliente = generar_par_claves()
+            clave_publica_cliente_bytes = serializar_clave_publica(clave_publica_cliente)
+            
+            # 2. Enviar clave pública al servidor
+            logger.info("Enviando clave pública al servidor...")
+            self.socket.send(b"INICIAR_NEGOCIACION|" + clave_publica_cliente_bytes)
+            
+            # 3. Recibir clave pública del servidor
+            respuesta = self.socket.recv(4096)
+            logger.debug(f"Respuesta recibida: {respuesta[:100]}...")
+            
+            if b"CLAVE_PUBLICA_SERVIDOR|" in respuesta:
+                partes = respuesta.split(b"|", 1)
+                clave_publica_servidor_bytes = partes[1]
+                self.clave_publica_servidor = deserializar_clave_publica(clave_publica_servidor_bytes)
+                logger.info("Clave pública del servidor recibida")
                 
+                # 4. Generar y enviar clave de sesión cifrada
+                clave_sesion = os.urandom(32)  # 256 bits para AES
+                logger.info(f"Clave de sesión generada: {len(clave_sesion)} bytes")
+                
+                clave_sesion_cifrada = encriptar_asimetrico(
+                    self.clave_publica_servidor, 
+                    base64.b64encode(clave_sesion).decode('utf-8')
+                )
+                
+                if clave_sesion_cifrada:
+                    logger.info("Enviando clave de sesión cifrada...")
+                    self.socket.send(f"CLAVE_SESION_CIFRADA|{clave_sesion_cifrada}".encode('utf-8'))
+                    
+                    # 5. Recibir confirmación
+                    confirmacion = self.socket.recv(1024).decode('utf-8')
+                    logger.info(f"Confirmación recibida: {confirmacion}")
+                    
+                    if confirmacion == "NEGOCIACION_EXITOSA":
+                        self.establecer_clave_comunicacion(clave_sesion)
+                        logger.info("Negociación exitosa - canal seguro establecido")
+                        return True
+                    else:
+                        logger.error(f"Confirmación inesperada: {confirmacion}")
+                else:
+                    logger.error("Error al cifrar clave de sesión")
+            else:
+                logger.error("Respuesta del servidor no contiene clave pública")
+            
+            return False
+            
         except Exception as e:
             logger.error(f"Error en negociación de clave: {e}")
+            self.desconectar()
             return False
         
     def enviar_comando(self, comando):
+        """Envía un comando a través del socket persistente"""
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((self.host, self.port))
+            if not self.socket:
+                logger.error("No hay conexión establecida")
+                return "ERROR: Sin conexión"
+            
+            if self.clave_comunicacion:
+                # Comunicación cifrada con clave de sesión
+                logger.debug(f"Cifrando comando: {comando}")
+                comando_cifrado = encriptar_mensaje(self.clave_comunicacion, comando)
                 
-                if self.clave_comunicacion:
-                    # Comunicación cifrada con clave de sesión
-                    comando_cifrado = encriptar_mensaje(self.clave_comunicacion, comando)
-                    if not comando_cifrado:
-                        return "ERROR_CIFRADO"
-                    sock.send(comando_cifrado.encode('utf-8'))
-                    
-                    respuesta_cifrada = sock.recv(1024).decode('utf-8')
-                    respuesta = desencriptar_mensaje(self.clave_comunicacion, respuesta_cifrada)
-                    if not respuesta:
-                        return "ERROR_DESCIFRADO"
-                    return respuesta
-                else:
-                    # Comunicación sin cifrar (solo para negociación)
-                    sock.send(comando.encode('utf-8'))
-                    return sock.recv(1024).decode('utf-8')
-                    
+                if not comando_cifrado:
+                    logger.error("Error al cifrar comando")
+                    return "ERROR_CIFRADO"
+                
+                logger.debug(f"Enviando comando cifrado (longitud: {len(comando_cifrado)})")
+                self.socket.send(comando_cifrado.encode('utf-8'))
+                
+                # Recibir respuesta
+                logger.debug("Esperando respuesta del servidor...")
+                respuesta_cifrada = self.socket.recv(4096).decode('utf-8')
+                logger.debug(f"Respuesta cifrada recibida (longitud: {len(respuesta_cifrada)})")
+                
+                if not respuesta_cifrada:
+                    logger.error("Respuesta vacía del servidor")
+                    return "ERROR: Respuesta vacía"
+                
+                respuesta = desencriptar_mensaje(self.clave_comunicacion, respuesta_cifrada)
+                
+                if not respuesta:
+                    logger.error("Error al descifrar respuesta")
+                    return "ERROR_DESCIFRADO"
+                
+                logger.debug(f"Respuesta descifrada: {respuesta}")
+                return respuesta
+            else:
+                logger.error("No hay clave de comunicación establecida")
+                return "ERROR: Sin clave de comunicación"
+                
         except ConnectionRefusedError:
+            logger.error("Servidor no disponible")
             return "ERROR: Servidor no disponible"
+        except Exception as e:
+            logger.error(f"Error al enviar comando: {e}")
+            return f"ERROR: {str(e)}"
 
 def registrar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     """Registra un usuario mediante comunicación segura"""
     api = ClienteAPI()
     
-    # Primero negociar clave segura
-    if not api.negociar_clave_segura():
-        return False
-        
-    # Ahora enviar registro cifrado
-    respuesta = api.enviar_comando(f"REGISTRO|{nombre_usuario}|{contraseña}")
-    return respuesta == "REGISTRO_EXITOSO"
+    try:
+        # Primero negociar clave segura
+        if not api.negociar_clave_segura():
+            logger.error("Fallo en negociación para registro")
+            return False
+            
+        # Ahora enviar registro cifrado
+        respuesta = api.enviar_comando(f"REGISTRO|{nombre_usuario}|{contraseña}")
+        return respuesta == "REGISTRO_EXITOSO"
+    finally:
+        api.desconectar()
 
 def autenticar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     """Autentica un usuario mediante comunicación segura"""
     api = ClienteAPI()
     
-    # Primero negociar clave segura
-    if not api.negociar_clave_segura():
-        return False
-        
-    respuesta = api.enviar_comando(f"LOGIN|{nombre_usuario}|{contraseña}")
-    return respuesta == "LOGIN_EXITOSO"
+    try:
+        # Primero negociar clave segura
+        if not api.negociar_clave_segura():
+            logger.error("Fallo en negociación para login")
+            return False
+            
+        respuesta = api.enviar_comando(f"LOGIN|{nombre_usuario}|{contraseña}")
+        return respuesta == "LOGIN_EXITOSO"
+    finally:
+        api.desconectar()
 
 def derivar_clave(contraseña_maestra: str, usuario_autenticado: str) -> bytes | None:
-    """Obtiene la clave maestra del servidor mediante comunicación segura"""
+    """
+    Deriva la Clave Maestra de Cifrado (K) para el usuario autenticado
+    a partir de su contraseña y el salt almacenado, usando PBKDF2HMAC.
+    """
     api = ClienteAPI()
     
-    # Primero negociar clave segura
-    if not api.negociar_clave_segura():
-        return None
-        
-    respuesta = api.enviar_comando(f"DERIVAR_CLAVE|{usuario_autenticado}|{contraseña_maestra}")
-    if respuesta.startswith("CLAVE_CITAS|"):
-        clave_citas_b64 = respuesta.split("|")[1]
-        try:
-            clave_K = base64.b64decode(clave_citas_b64)
-            logger.info(f"Éxito: Clave Maestra K recibida del servidor mediante canal seguro.")
-            return clave_K
-        except Exception as e:
-            logger.error(f"Error al decodificar la clave del servidor: {e}")
+    try:
+        # PRIMERO negociar clave segura
+        logger.info("Negociando clave segura con el servidor...")
+        if not api.negociar_clave_segura():
+            logger.error("Fallo en la negociación de clave segura")
             return None
-    return None
+        
+        # LUEGO pedir la derivación de clave a través del canal seguro
+        logger.info(f"Solicitando derivación de clave para {usuario_autenticado}")
+        respuesta = api.enviar_comando(f"DERIVAR_CLAVE|{usuario_autenticado}|{contraseña_maestra}")
+        
+        if respuesta.startswith("CLAVE_CITAS|"):
+            clave_citas_b64 = respuesta.split("|")[1]
+            try:
+                clave_K = base64.b64decode(clave_citas_b64)
+                logger.info(f"Éxito: Clave Maestra K recibida del servidor.")
+                return clave_K
+            except Exception as e:
+                logger.error(f"Error al decodificar la clave del servidor: {e}")
+                return None
+        
+        logger.error(f"Error derivando clave: {respuesta}")
+        return None
+    finally:
+        api.desconectar()
 
 def obtener_citas_usuario(usuario: str, clave_comunicacion: bytes) -> dict:
     """Obtiene todas las citas del usuario desde el servidor"""
     api = ClienteAPI()
-    api.establecer_clave_comunicacion(clave_comunicacion)
-    respuesta = api.enviar_comando(f"OBTENER_CITAS|{usuario}")
+    
     try:
-        return json.loads(respuesta) if respuesta and respuesta not in ["ERROR: Servidor no disponible", "ERROR_CIFRADO", "ERROR_DESCIFRADO"] else {}
-    except:
-        return {}
+        if not api.negociar_clave_segura():
+            return {}
+        
+        # NO sobrescribir la clave de sesión - ya está establecida por negociar_clave_segura()
+        respuesta = api.enviar_comando(f"OBTENER_CITAS|{usuario}")
+        
+        try:
+            return json.loads(respuesta) if respuesta and respuesta not in ["ERROR: Servidor no disponible", "ERROR_CIFRADO", "ERROR_DESCIFRADO"] else {}
+        except:
+            return {}
+    finally:
+        api.desconectar()
 
 def guardar_cita_servidor(usuario: str, fecha: datetime, motivo_cifrado: str, clave_comunicacion: bytes) -> bool:
     """Guarda una cita en el servidor"""
     api = ClienteAPI()
-    api.establecer_clave_comunicacion(clave_comunicacion)
-    fecha_iso = fecha.isoformat()
-    respuesta = api.enviar_comando(f"GUARDAR_CITA|{usuario}|{fecha_iso}|{motivo_cifrado}")
-    return respuesta == "CITA_GUARDADA"
+    
+    try:
+        if not api.negociar_clave_segura():
+            return False
+        
+        # NO sobrescribir la clave de sesión - ya está establecida por negociar_clave_segura()
+        fecha_iso = fecha.isoformat()
+        respuesta = api.enviar_comando(f"GUARDAR_CITA|{usuario}|{fecha_iso}|{motivo_cifrado}")
+        return respuesta == "CITA_GUARDADA"
+    finally:
+        api.desconectar()
 
 def obtener_cita_servidor(usuario: str, fecha: datetime, clave_comunicacion: bytes) -> str:
     """Obtiene una cita específica del servidor"""
     api = ClienteAPI()
-    api.establecer_clave_comunicacion(clave_comunicacion)
-    fecha_iso = fecha.isoformat()
-    respuesta = api.enviar_comando(f"OBTENER_CITA|{usuario}|{fecha_iso}")
-    return respuesta if respuesta != "CITA_NO_ENCONTRADA" else None
+    
+    try:
+        if not api.negociar_clave_segura():
+            return None
+        
+        # NO sobrescribir la clave de sesión - ya está establecida por negociar_clave_segura()
+        fecha_iso = fecha.isoformat()
+        respuesta = api.enviar_comando(f"OBTENER_CITA|{usuario}|{fecha_iso}")
+        return respuesta if respuesta != "CITA_NO_ENCONTRADA" else None
+    finally:
+        api.desconectar()
 
 def borrar_cita_servidor(usuario: str, fecha: datetime, clave_comunicacion: bytes) -> bool:
     """Elimina una cita del servidor"""
     api = ClienteAPI()
-    api.establecer_clave_comunicacion(clave_comunicacion)
-    fecha_iso = fecha.isoformat()
-    respuesta = api.enviar_comando(f"BORRAR_CITA|{usuario}|{fecha_iso}")
-    return respuesta == "CITA_BORRADA"
+    
+    try:
+        if not api.negociar_clave_segura():
+            return False
+        
+        # NO sobrescribir la clave de sesión - ya está establecida por negociar_clave_segura()
+        fecha_iso = fecha.isoformat()
+        respuesta = api.enviar_comando(f"BORRAR_CITA|{usuario}|{fecha_iso}")
+        return respuesta == "CITA_BORRADA"
+    finally:
+        api.desconectar()
+
+# [El resto de funciones permanecen igual: aplicacion, ver_citas_pendientes, crear_cita, editar_cita, eliminar_cita]
 
 def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     """
