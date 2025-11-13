@@ -85,70 +85,9 @@ if not logger.handlers:
 logger.debug("Sistema de logging 'SecureCitasCLI' inicializado.")
 # =============================================================================
 
-import socket
-import threading
-from auth import registrar_usuario, autenticar_usuario, derivar_clave
-from crypto_servidor import guardar_cita_servidor, obtener_cita, borrar_cita_json, load_citas
-
-def procesar_comando(comando):
-    """Procesa comandos del cliente y devuelve respuesta"""
-    partes = comando.split('|')
-    cmd = partes[0]
-    
-    if cmd == "REGISTRO":
-        usuario, password = partes[1], partes[2]
-        exito = registrar_usuario(usuario, password)
-        return "REGISTRO_EXITOSO" if exito else "REGISTRO_FALLIDO"
-        
-    elif cmd == "LOGIN":
-        usuario, password = partes[1], partes[2]
-        exito = autenticar_usuario(usuario, password)
-        return "LOGIN_EXITOSO" if exito else "LOGIN_FALLIDO"
-        
-    elif cmd == "GUARDAR_CITA":
-        usuario, fecha, motivo_cifrado = partes[1], partes[2], partes[3]
-        fecha_dt = datetime.fromisoformat(fecha)
-        exito = guardar_cita_servidor(usuario, fecha_dt, motivo_cifrado)
-        return "CITA_GUARDADA" if exito else "ERROR_GUARDAR_CITA"
-        
-    elif cmd == "OBTENER_CITAS":
-        usuario = partes[1]
-        citas = load_citas()
-        return str(citas.get(usuario, {}))
-        
-    else:
-        return "COMANDO_DESCONOCIDO"
-
-def manejar_cliente(client_socket):
-    """Maneja la comunicación con un cliente"""
-    try:
-        while True:
-            comando = client_socket.recv(1024).decode('utf-8')
-            if not comando:
-                break
-                
-            print(f"📨 Comando recibido: {comando}")
-            respuesta = procesar_comando(comando)
-            client_socket.send(respuesta.encode('utf-8'))
-    except Exception as e:
-        print(f"Error con cliente: {e}")
-    finally:
-        client_socket.close()
-
-def iniciar_servidor():
-    host = 'localhost'
-    port = 5000
-    
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-        server_socket.bind((host, port))
-        server_socket.listen()
-        print(f"🖥️  Servidor escuchando en {host}:{port}")
-        
-        while True:
-            client_socket, addr = server_socket.accept()
-            print(f"🔗 Cliente conectado desde {addr}")
-            # Manejar cliente en hilo separado
-            threading.Thread(target=manejar_cliente, args=(client_socket,)).start()
+import logging
+from funcionalidades_servidor import Servidor
 
 if __name__ == '__main__':
-    iniciar_servidor()
+    servidor = Servidor()
+    servidor.iniciar()
