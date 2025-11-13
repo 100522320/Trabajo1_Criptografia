@@ -1,3 +1,5 @@
+# === Este es el main del cliente ===
+
 import sys
 import re
 import os
@@ -10,7 +12,19 @@ import logging # AÑADIDO: Importamos el módulo de logging
 
 def setup_venv():
     """Configura el venv de forma compatible con cualquier SO"""
-    venv_base = os.path.join(os.path.dirname(__file__), '.venv')
+    # Buscar el .venv en el directorio actual o padres
+    current_dir = os.getcwd()
+    venv_base = None
+    
+    # Buscar en directorio actual y padres
+    for dir_path in [current_dir] + [os.path.dirname(current_dir)]:
+        possible_venv = os.path.join(dir_path, '.venv')
+        if os.path.exists(possible_venv):
+            venv_base = possible_venv
+            break
+    
+    if not venv_base:
+        return False
    
     # Posibles rutas de site-packages según el SO
     possible_paths = []
@@ -68,10 +82,8 @@ if not logger.handlers:
 logger.debug("Sistema de logging 'SecureCitasCLI' inicializado.")
 # =============================================================================
 
-# Importa las funciones que deben estar definidas en auth.py
-from auth import registrar_usuario, autenticar_usuario, derivar_clave
 # Importa las funciones de la aplicacion que deben estar definidas en funcionalidades.py
-from funcionalidades import aplicacion
+from funcionalidades_cliente import aplicacion, registrar_usuario, autenticar_usuario, derivar_clave
 # from crypto import logica_principal_aplicacion # Para el flujo posterior de Eval 2
 
 def contraseñas_iguales(contraseña1:str, contraseña2:str)->bool:
@@ -156,6 +168,7 @@ def menu_principal():
                 print(f"Bienvenido a SecureCitas CLI, {nombre_usuario}!")
                 # Si la autenticación es exitosa, se sale del bucle
                 return nombre_usuario, contraseña
+            print("Este usuario ya existe. Por favor inicie sesion.")
            
         elif opcion in {'no', 'n'}:
             # --- FLUJO DE INICIO DE SESIÓN ---

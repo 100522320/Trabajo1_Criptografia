@@ -3,11 +3,29 @@ import json # Para leer/escribir los datos de la cita cifrada
 import logging # AÑADIDO: Importamos el módulo de logging
 # Utilidades para conversión
 import base64
-#importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
-from crypto import encriptar_cita,desencriptar_cita,load_citas,guardar_cita, obtener_cita, borrar_cita_json
+# Utilidades para la conexión
+import socket
+# Importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
+from crypto_servidor import encriptar_cita,desencriptar_cita,load_citas,guardar_cita, obtener_cita, borrar_cita_json
 
 # AÑADIDO: Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
+
+
+class ClienteAPI:
+    def __init__(self):
+        self.host = 'localhost'
+        self.port = 5000
+        
+    def enviar_comando(self, comando):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((self.host, self.port))
+                sock.send(comando.encode('utf-8'))
+                respuesta = sock.recv(1024).decode('utf-8')
+                return respuesta
+        except ConnectionRefusedError:
+            return "ERROR: Servidor no disponible"
 
 
 def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
