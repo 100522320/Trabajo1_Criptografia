@@ -59,7 +59,7 @@ if not setup_venv():
 # La práctica pide mostrar el resultado en un log o mensaje de depuración junto
 # con el algoritmo y la longitud de clave.
 # =============================================================================
-LOG_FILENAME = 'seguridad.log'
+LOG_FILENAME = os.path.join(os.path.dirname(__file__), 'seguridad.log')
 
 # Crear el logger principal y configurar el nivel más bajo (DEBUG)
 logger = logging.getLogger('SecureCitasCLI')
