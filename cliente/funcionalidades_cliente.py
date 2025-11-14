@@ -16,6 +16,9 @@ from crypto_cliente import (
 # AÑADIDO: Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
 
+# Instancia global del cliente para mantener la conexión
+_cliente_global = None
+
 class ClienteAPI:
     def __init__(self):
         self.host = 'localhost'
@@ -23,7 +26,8 @@ class ClienteAPI:
         self.clave_comunicacion = None
         self.clave_privada = None
         self.clave_publica_servidor = None
-        self.socket = None  # Socket persistente
+        self.socket = None
+        self.conectado = False
         
     def establecer_claves(self, clave_privada, clave_publica_servidor):
         self.clave_privada = clave_privada
@@ -35,12 +39,41 @@ class ClienteAPI:
     def conectar(self):
         """Establece una conexión persistente con el servidor"""
         try:
+            if self.socket:
+                # Ya hay una conexión, verificar si sigue activa
+                try:
+                    self.socket.setblocking(False)
+                    data = self.socket.recv(1, socket.MSG_PEEK)
+                    self.socket.setblocking(True)
+                    if not data:
+                        # Conexión cerrada, reconectar
+                        logger.info("Conexión cerrada, reconectando...")
+                        self.socket.close()
+                        self.socket = None
+                        self.conectado = False
+                except BlockingIOError:
+                    # Socket está activo pero sin datos, todo OK
+                    self.socket.setblocking(True)
+                    return True
+                except:
+                    # Error, reconectar
+                    logger.info("Error en conexión, reconectando...")
+                    try:
+                        self.socket.close()
+                    except:
+                        pass
+                    self.socket = None
+                    self.conectado = False
+            
+            # Crear nueva conexión
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.host, self.port))
+            self.conectado = True
             logger.info("Conexión establecida con el servidor")
             return True
         except Exception as e:
             logger.error(f"Error al conectar: {e}")
+            self.conectado = False
             return False
     
     def desconectar(self):
@@ -52,11 +85,12 @@ class ClienteAPI:
             except:
                 pass
             self.socket = None
+            self.conectado = False
         
     def negociar_clave_segura(self):
         """Negocia una clave de comunicación segura usando cifrado asimétrico"""
         try:
-            # Conectar al servidor
+            # Conectar al servidor si no está conectado
             if not self.conectar():
                 return False
             
@@ -116,7 +150,7 @@ class ClienteAPI:
     def enviar_comando(self, comando):
         """Envía un comando a través del socket persistente"""
         try:
-            if not self.socket:
+            if not self.socket or not self.conectado:
                 logger.error("No hay conexión establecida")
                 return "ERROR: Sin conexión"
             
@@ -155,22 +189,39 @@ class ClienteAPI:
                 
         except ConnectionRefusedError:
             logger.error("Servidor no disponible")
+            self.conectado = False
             return "ERROR: Servidor no disponible"
         except Exception as e:
             logger.error(f"Error al enviar comando: {e}")
+            self.conectado = False
             return f"ERROR: {str(e)}"
+
+def obtener_cliente():
+    """Obtiene o crea la instancia global del cliente"""
+    global _cliente_global
+    if _cliente_global is None or not _cliente_global.conectado:
+        _cliente_global = ClienteAPI()
+        if not _cliente_global.negociar_clave_segura():
+            logger.error("No se pudo establecer conexión segura")
+            return None
+    return _cliente_global
+
+def cerrar_cliente():
+    """Cierra la conexión global del cliente"""
+    global _cliente_global
+    if _cliente_global:
+        _cliente_global.desconectar()
+        _cliente_global = None
 
 def registrar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     """Registra un usuario mediante comunicación segura"""
     api = ClienteAPI()
     
     try:
-        # Primero negociar clave segura
         if not api.negociar_clave_segura():
             logger.error("Fallo en negociación para registro")
             return False
             
-        # Ahora enviar registro cifrado
         respuesta = api.enviar_comando(f"REGISTRO|{nombre_usuario}|{contraseña}")
         return respuesta == "REGISTRO_EXITOSO"
     finally:
@@ -181,7 +232,6 @@ def autenticar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     api = ClienteAPI()
     
     try:
-        # Primero negociar clave segura
         if not api.negociar_clave_segura():
             logger.error("Fallo en negociación para login")
             return False
@@ -199,13 +249,11 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str) -> bytes |
     api = ClienteAPI()
     
     try:
-        # PRIMERO negociar clave segura
         logger.info("Negociando clave segura con el servidor...")
         if not api.negociar_clave_segura():
             logger.error("Fallo en la negociación de clave segura")
             return None
         
-        # LUEGO pedir la derivación de clave a través del canal seguro
         logger.info(f"Solicitando derivación de clave para {usuario_autenticado}")
         respuesta = api.enviar_comando(f"DERIVAR_CLAVE|{usuario_autenticado}|{contraseña_maestra}")
         
@@ -214,6 +262,11 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str) -> bytes |
             try:
                 clave_K = base64.b64decode(clave_citas_b64)
                 logger.info(f"Éxito: Clave Maestra K recibida del servidor.")
+                
+                # Guardar esta conexión como la global
+                global _cliente_global
+                _cliente_global = api
+                
                 return clave_K
             except Exception as e:
                 logger.error(f"Error al decodificar la clave del servidor: {e}")
@@ -221,73 +274,69 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str) -> bytes |
         
         logger.error(f"Error derivando clave: {respuesta}")
         return None
-    finally:
+    except Exception as e:
+        logger.error(f"Error en derivar_clave: {e}")
         api.desconectar()
+        return None
 
 def obtener_citas_usuario(usuario: str, clave_comunicacion: bytes) -> dict:
     """Obtiene todas las citas del usuario desde el servidor"""
-    api = ClienteAPI()
+    api = obtener_cliente()
+    if not api:
+        return {}
     
     try:
-        if not api.negociar_clave_segura():
-            return {}
-        
-        # NO sobrescribir la clave de sesión - ya está establecida por negociar_clave_segura()
         respuesta = api.enviar_comando(f"OBTENER_CITAS|{usuario}")
         
         try:
             return json.loads(respuesta) if respuesta and respuesta not in ["ERROR: Servidor no disponible", "ERROR_CIFRADO", "ERROR_DESCIFRADO"] else {}
         except:
             return {}
-    finally:
-        api.desconectar()
+    except Exception as e:
+        logger.error(f"Error obteniendo citas: {e}")
+        return {}
 
 def guardar_cita_servidor(usuario: str, fecha: datetime, motivo_cifrado: str, clave_comunicacion: bytes) -> bool:
     """Guarda una cita en el servidor"""
-    api = ClienteAPI()
+    api = obtener_cliente()
+    if not api:
+        return False
     
     try:
-        if not api.negociar_clave_segura():
-            return False
-        
-        # NO sobrescribir la clave de sesión - ya está establecida por negociar_clave_segura()
         fecha_iso = fecha.isoformat()
         respuesta = api.enviar_comando(f"GUARDAR_CITA|{usuario}|{fecha_iso}|{motivo_cifrado}")
         return respuesta == "CITA_GUARDADA"
-    finally:
-        api.desconectar()
+    except Exception as e:
+        logger.error(f"Error guardando cita: {e}")
+        return False
 
 def obtener_cita_servidor(usuario: str, fecha: datetime, clave_comunicacion: bytes) -> str:
     """Obtiene una cita específica del servidor"""
-    api = ClienteAPI()
+    api = obtener_cliente()
+    if not api:
+        return None
     
     try:
-        if not api.negociar_clave_segura():
-            return None
-        
-        # NO sobrescribir la clave de sesión - ya está establecida por negociar_clave_segura()
         fecha_iso = fecha.isoformat()
         respuesta = api.enviar_comando(f"OBTENER_CITA|{usuario}|{fecha_iso}")
         return respuesta if respuesta != "CITA_NO_ENCONTRADA" else None
-    finally:
-        api.desconectar()
+    except Exception as e:
+        logger.error(f"Error obteniendo cita: {e}")
+        return None
 
 def borrar_cita_servidor(usuario: str, fecha: datetime, clave_comunicacion: bytes) -> bool:
     """Elimina una cita del servidor"""
-    api = ClienteAPI()
+    api = obtener_cliente()
+    if not api:
+        return False
     
     try:
-        if not api.negociar_clave_segura():
-            return False
-        
-        # NO sobrescribir la clave de sesión - ya está establecida por negociar_clave_segura()
         fecha_iso = fecha.isoformat()
         respuesta = api.enviar_comando(f"BORRAR_CITA|{usuario}|{fecha_iso}")
         return respuesta == "CITA_BORRADA"
-    finally:
-        api.desconectar()
-
-# [El resto de funciones permanecen igual: aplicacion, ver_citas_pendientes, crear_cita, editar_cita, eliminar_cita]
+    except Exception as e:
+        logger.error(f"Error borrando cita: {e}")
+        return False
 
 def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
     """
@@ -316,6 +365,7 @@ def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
             case '5':
                 logger.info("El usuario ha salido de la aplicación.")
                 print("Que tenga un buen dia.")
+                cerrar_cliente()  # Cerrar conexión al salir
                 return
             case _:
                 print("Porfavor introduzca un numero del 1 al 5.\n")

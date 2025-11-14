@@ -86,6 +86,9 @@ class Servidor:
                 fecha = datetime.fromisoformat(fecha_iso)
                 exito = borrar_cita_json(usuario, fecha)
                 return "CITA_BORRADA" if exito else "ERROR_BORRAR_CITA"
+            
+            elif cmd == "DESCONECTAR":
+                return "DESCONEXION_OK"
                 
             else:
                 return "COMANDO_DESCONOCIDO"
@@ -94,11 +97,13 @@ class Servidor:
             logger.error(f"Error procesando comando: {e}")
             return "ERROR_PROCESAMIENTO"
 
-    def manejar_cliente(self, client_socket):
-        """Maneja la comunicación con un cliente"""
+    def manejar_cliente(self, client_socket, addr):
+        """Maneja la comunicación con un cliente de forma persistente"""
         clave_sesion = None
         
         try:
+            logger.info(f"Cliente conectado desde {addr}")
+            
             # FASE 1: Negociación de clave (siempre comienza así)
             comando_negociacion = client_socket.recv(4096).decode('utf-8')
             logger.info(f"Fase 1 - Negociación recibida: {comando_negociacion[:100]}...")
@@ -132,46 +137,69 @@ class Servidor:
                 logger.error("No comenzó con negociación")
                 return
             
-            # FASE 3: Comunicación normal cifrada
-            logger.info("Iniciando comunicación cifrada...")
+            # FASE 3: Comunicación normal cifrada (bucle persistente)
+            logger.info("Iniciando comunicación cifrada persistente...")
+            
             while True:
-                comando_cifrado = client_socket.recv(4096).decode('utf-8')
-                if not comando_cifrado:
-                    logger.info("Cliente desconectado")
-                    break
+                try:
+                    # Recibir comando cifrado
+                    comando_cifrado = client_socket.recv(4096).decode('utf-8')
                     
-                logger.debug(f"Comando cifrado recibido: {comando_cifrado[:50]}...")
-                
-                # Descifrar comando
-                comando = desencriptar_mensaje(clave_sesion, comando_cifrado)
-                if not comando:
-                    logger.error("Error descifrando comando")
-                    client_socket.send("ERROR_DESCIFRADO".encode('utf-8'))
-                    continue
-                
-                logger.info(f"Comando descifrado: {comando}")
-                
-                respuesta = self.procesar_comando(comando)
-                logger.info(f"Respuesta generada: {respuesta}")
-                
-                # Cifrar respuesta
-                respuesta_cifrada = encriptar_mensaje(clave_sesion, respuesta)
-                if respuesta_cifrada:
-                    client_socket.send(respuesta_cifrada.encode('utf-8'))
-                    logger.debug("Respuesta enviada cifrada")
-                else:
-                    client_socket.send("ERROR_CIFRADO".encode('utf-8'))
-                    logger.error("Error cifrando respuesta")
+                    if not comando_cifrado:
+                        logger.info("Cliente se desconectó (no hay datos)")
+                        break
+                    
+                    logger.debug(f"Comando cifrado recibido: {comando_cifrado[:50]}...")
+                    
+                    # Descifrar comando
+                    comando = desencriptar_mensaje(clave_sesion, comando_cifrado)
+                    if not comando:
+                        logger.error("Error descifrando comando")
+                        respuesta_cifrada = encriptar_mensaje(clave_sesion, "ERROR_DESCIFRADO")
+                        if respuesta_cifrada:
+                            client_socket.send(respuesta_cifrada.encode('utf-8'))
+                        continue
+                    
+                    logger.info(f"Comando descifrado: {comando}")
+                    
+                    # Verificar si es comando de desconexión
+                    if comando == "DESCONECTAR":
+                        logger.info("Cliente solicitó desconexión")
+                        respuesta_cifrada = encriptar_mensaje(clave_sesion, "DESCONEXION_OK")
+                        if respuesta_cifrada:
+                            client_socket.send(respuesta_cifrada.encode('utf-8'))
+                        break
+                    
+                    # Procesar comando
+                    respuesta = self.procesar_comando(comando)
+                    logger.info(f"Respuesta generada: {respuesta[:100]}...")
+                    
+                    # Cifrar respuesta
+                    respuesta_cifrada = encriptar_mensaje(clave_sesion, respuesta)
+                    if respuesta_cifrada:
+                        client_socket.send(respuesta_cifrada.encode('utf-8'))
+                        logger.debug("Respuesta enviada cifrada")
+                    else:
+                        client_socket.send("ERROR_CIFRADO".encode('utf-8'))
+                        logger.error("Error cifrando respuesta")
+                        
+                except socket.error as e:
+                    logger.info(f"Error de socket: {e} - Cliente desconectado")
+                    break
+                except Exception as e:
+                    logger.error(f"Error en bucle de comunicación: {e}")
+                    break
                         
         except Exception as e:
             logger.error(f"Error con cliente: {e}")
         finally:
             client_socket.close()
-            logger.info("Conexión cerrada")
+            logger.info(f"Conexión cerrada con {addr}")
 
     def iniciar(self):
         """Inicia el servidor"""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             server_socket.bind((self.host, self.port))
             server_socket.listen()
             print(f"🖥️  Servidor SecureCitas escuchando en {self.host}:{self.port}")
@@ -180,6 +208,9 @@ class Servidor:
             while True:
                 client_socket, addr = server_socket.accept()
                 print(f"🔗 Cliente conectado desde {addr}")
-                logger.info(f"Cliente conectado desde {addr}")
                 
-                threading.Thread(target=self.manejar_cliente, args=(client_socket,), daemon=True).start()
+                threading.Thread(
+                    target=self.manejar_cliente, 
+                    args=(client_socket, addr), 
+                    daemon=True
+                ).start()

@@ -149,11 +149,7 @@ def encriptar_mensaje(clave: bytes, mensaje: str) -> str:
         encriptador = cifrador.encryptor()
         texto_cifrado = encriptador.update(mensaje.encode('utf-8')) + encriptador.finalize()
         tag = encriptador.tag
-        
-        resultado = base64.b64encode(nonce + tag + texto_cifrado).decode('utf-8')
-        logger.debug(f"Mensaje cifrado. Longitud original: {len(mensaje)}, longitud cifrada: {len(resultado)}")
-        return resultado
-        
+        return base64.b64encode(nonce + tag + texto_cifrado).decode('utf-8')
     except Exception as e:
         logger.error(f"Error durante el cifrado del mensaje: {e}")
         return None

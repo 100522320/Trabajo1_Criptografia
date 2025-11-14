@@ -94,29 +94,15 @@ def encriptar_mensaje(clave: bytes, mensaje: str) -> str:
 def desencriptar_mensaje(clave: bytes, mensaje_cifrado: str) -> str:
     """Descifra un mensaje recibido del servidor"""
     try:
-        logger.debug(f"Intentando descifrar mensaje. Longitud mensaje cifrado: {len(mensaje_cifrado)}")
-        
         datos = base64.b64decode(mensaje_cifrado.encode('utf-8'))
-        logger.debug(f"Datos Base64 decodificados. Longitud: {len(datos)}")
-        
-        # Verificar que tenemos suficientes datos
-        if len(datos) < LONGITUD_AES_NONCE + 16:
-            logger.error(f"Datos insuficientes. Se esperaban al menos {LONGITUD_AES_NONCE + 16} bytes, se recibieron {len(datos)}")
-            return None
-            
         nonce = datos[:LONGITUD_AES_NONCE]
         tag = datos[LONGITUD_AES_NONCE:LONGITUD_AES_NONCE + 16]
         texto_cifrado = datos[LONGITUD_AES_NONCE + 16:]
         
-        logger.debug(f"Nonce: {len(nonce)} bytes, Tag: {len(tag)} bytes, Texto cifrado: {len(texto_cifrado)} bytes")
-        
         cifrador = Cipher(algorithms.AES(clave), modes.GCM(nonce, tag), backend=default_backend())
         desencriptador = cifrador.decryptor()
         texto_plano = desencriptador.update(texto_cifrado) + desencriptador.finalize()
-        
-        logger.debug("Descifrado exitoso")
         return texto_plano.decode('utf-8')
-        
     except InvalidTag:
         logger.error("FALLO CRÍTICO: InvalidTag en mensaje del servidor. Datos posiblemente manipulados.")
         return None
