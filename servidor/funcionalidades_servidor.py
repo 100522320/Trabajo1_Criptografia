@@ -4,15 +4,16 @@ import json # Para leer/escribir los datos de la cita cifrada
 import logging # AÑADIDO: Importamos el módulo de logging
 # Utilidades para conversión
 import base64
-# Utilidades para la conexión
+# Utilidades para la conexión y el protocolo TLS
 import socket
+import ssl
 # Importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
+from crypto_servidor import guardar_cita, obtener_cita, borrar_cita_json, load_citas
+from auth import registrar_usuario, autenticar_usuario, derivar_clave
 from crypto_servidor import (
     generar_par_claves, serializar_clave_publica, desencriptar_asimetrico,
     encriptar_mensaje, desencriptar_mensaje
 )
-from auth import registrar_usuario, autenticar_usuario, derivar_clave
-from crypto_servidor import guardar_cita, obtener_cita, borrar_cita_json, load_citas
 
 # AÑADIDO: Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
@@ -22,8 +23,47 @@ class Servidor:
     def __init__(self):
         self.host = 'localhost'
         self.port = 5000
-        # Generar claves al inicializar
+        self.clientes_conectados = []
+        self.clientes_lock = threading.Lock()
+        self.servidor_activo = True
+        # Generar claves RSA al inicializar
         generar_par_claves()
+        logger.info("Servidor inicializado con cifrado híbrido RSA+AES")
+    
+    def agregar_cliente(self, client_socket):
+        """Agrega un cliente a la lista de conectados"""
+        with self.clientes_lock:
+            self.clientes_conectados.append(client_socket)
+            logger.info(f"Cliente agregado. Total conectados: {len(self.clientes_conectados)}")
+    
+    def remover_cliente(self, client_socket):
+        """Remueve un cliente de la lista de conectados"""
+        with self.clientes_lock:
+            if client_socket in self.clientes_conectados:
+                self.clientes_conectados.remove(client_socket)
+                logger.info(f"Cliente removido. Total conectados: {len(self.clientes_conectados)}")
+    
+    def notificar_cierre_servidor(self):
+        """Notifica a todos los clientes que el servidor se está cerrando"""
+        with self.clientes_lock:
+            logger.info(f"Notificando cierre a {len(self.clientes_conectados)} cliente(s)...")
+            clientes_notificados = 0
+            
+            for client_socket in self.clientes_conectados[:]:
+                try:
+                    mensaje = "SERVIDOR_CERRANDO"
+                    client_socket.send(mensaje.encode('utf-8'))
+                    clientes_notificados += 1
+                    logger.debug(f"Notificación de cierre enviada a cliente")
+                except Exception as e:
+                    logger.error(f"Error notificando a cliente: {e}")
+            
+            if clientes_notificados > 0:
+                import time
+                time.sleep(0.5)
+            
+            self.clientes_conectados.clear()
+            logger.info(f"Se notificó exitosamente a {clientes_notificados} cliente(s)")
         
     def procesar_comando(self, comando):
         """Procesa comandos del cliente"""
@@ -103,8 +143,9 @@ class Servidor:
         
         try:
             logger.info(f"Cliente conectado desde {addr}")
+            self.agregar_cliente(client_socket)
             
-            # FASE 1: Negociación de clave (siempre comienza así)
+            # FASE 1: Negociación de clave (RSA)
             comando_negociacion = client_socket.recv(4096).decode('utf-8')
             logger.info(f"Fase 1 - Negociación recibida: {comando_negociacion[:100]}...")
             
@@ -112,7 +153,7 @@ class Servidor:
                 respuesta = self.procesar_comando(comando_negociacion)
                 client_socket.send(respuesta.encode('utf-8'))
                 
-                # FASE 2: Recibir clave de sesión cifrada
+                # FASE 2: Recibir clave de sesión cifrada con RSA
                 comando_clave = client_socket.recv(4096).decode('utf-8')
                 logger.info(f"Fase 2 - Clave sesión recibida: {comando_clave[:100]}...")
                 
@@ -120,7 +161,7 @@ class Servidor:
                     respuesta = self.procesar_comando(comando_clave)
                     client_socket.send(respuesta.encode('utf-8'))
                     
-                    # Extraer la clave de sesión
+                    # Extraer la clave de sesión descifrándola con RSA
                     partes = comando_clave.split('|')
                     clave_sesion_cifrada = partes[1]
                     clave_sesion_b64 = desencriptar_asimetrico(clave_sesion_cifrada)
@@ -137,13 +178,19 @@ class Servidor:
                 logger.error("No comenzó con negociación")
                 return
             
-            # FASE 3: Comunicación normal cifrada (bucle persistente)
+            # FASE 3: Comunicación cifrada con AES-GCM (bucle persistente)
             logger.info("Iniciando comunicación cifrada persistente...")
             
-            while True:
+            while self.servidor_activo:
                 try:
-                    # Recibir comando cifrado
-                    comando_cifrado = client_socket.recv(4096).decode('utf-8')
+                    client_socket.settimeout(1.0)
+                    
+                    try:
+                        comando_cifrado = client_socket.recv(4096).decode('utf-8')
+                    except socket.timeout:
+                        continue
+                    
+                    client_socket.settimeout(None)
                     
                     if not comando_cifrado:
                         logger.info("Cliente se desconectó (no hay datos)")
@@ -151,7 +198,7 @@ class Servidor:
                     
                     logger.debug(f"Comando cifrado recibido: {comando_cifrado[:50]}...")
                     
-                    # Descifrar comando
+                    # Descifrar comando con AES-GCM
                     comando = desencriptar_mensaje(clave_sesion, comando_cifrado)
                     if not comando:
                         logger.error("Error descifrando comando")
@@ -162,7 +209,6 @@ class Servidor:
                     
                     logger.info(f"Comando descifrado: {comando}")
                     
-                    # Verificar si es comando de desconexión
                     if comando == "DESCONECTAR":
                         logger.info("Cliente solicitó desconexión")
                         respuesta_cifrada = encriptar_mensaje(clave_sesion, "DESCONEXION_OK")
@@ -174,7 +220,7 @@ class Servidor:
                     respuesta = self.procesar_comando(comando)
                     logger.info(f"Respuesta generada: {respuesta[:100]}...")
                     
-                    # Cifrar respuesta
+                    # Cifrar respuesta con AES-GCM
                     respuesta_cifrada = encriptar_mensaje(clave_sesion, respuesta)
                     if respuesta_cifrada:
                         client_socket.send(respuesta_cifrada.encode('utf-8'))
@@ -193,24 +239,52 @@ class Servidor:
         except Exception as e:
             logger.error(f"Error con cliente: {e}")
         finally:
+            self.remover_cliente(client_socket)
             client_socket.close()
             logger.info(f"Conexión cerrada con {addr}")
 
     def iniciar(self):
         """Inicia el servidor"""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
+        try:
             server_socket.bind((self.host, self.port))
             server_socket.listen()
-            print(f"🖥️  Servidor SecureCitas escuchando en {self.host}:{self.port}")
-            logger.info(f"Servidor iniciado en {self.host}:{self.port}")
             
-            while True:
-                client_socket, addr = server_socket.accept()
-                print(f"🔗 Cliente conectado desde {addr}")
-                
-                threading.Thread(
-                    target=self.manejar_cliente, 
-                    args=(client_socket, addr), 
-                    daemon=True
-                ).start()
+            print(f"🖥️  Servidor SecureCitas escuchando en {self.host}:{self.port}")
+            print(f"🔐 Cifrado híbrido: RSA-2048 + AES-256-GCM")
+            print(f"📋 Presiona Ctrl+C para detener el servidor de forma segura")
+            logger.info(f"Servidor iniciado en {self.host}:{self.port} con cifrado híbrido")
+            
+            while self.servidor_activo:
+                try:
+                    server_socket.settimeout(1.0)
+                    try:
+                        client_socket, addr = server_socket.accept()
+                    except socket.timeout:
+                        continue
+                    
+                    print(f"🔗 Cliente conectado desde {addr}")
+                    
+                    threading.Thread(
+                        target=self.manejar_cliente, 
+                        args=(client_socket, addr), 
+                        daemon=True
+                    ).start()
+                    
+                except KeyboardInterrupt:
+                    print("\n\n⚠️  Ctrl+C detectado. Cerrando servidor de forma segura...")
+                    logger.info("Servidor interrumpido por Ctrl+C")
+                    self.servidor_activo = False
+                    self.notificar_cierre_servidor()
+                    print("✅ Todos los clientes han sido notificados.")
+                    break
+                    
+        except Exception as e:
+            logger.error(f"Error en el servidor: {e}")
+            print(f"❌ Error en el servidor: {e}")
+        finally:
+            server_socket.close()
+            logger.info("Servidor cerrado")
+            print("👋 Servidor cerrado correctamente.")

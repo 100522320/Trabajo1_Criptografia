@@ -1,12 +1,7 @@
 # === Este es el main del servidor ===
 
-import datetime
-import socket
-import threading
 import sys
-import re
 import os
-import getpass #para que no se lea la contraseña
 import logging # AÑADIDO: Importamos el módulo de logging
 
 # =============================================================================
