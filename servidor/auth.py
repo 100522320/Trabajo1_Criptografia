@@ -21,7 +21,10 @@ logger = logging.getLogger('SecureCitasCLI')
 #-----------------------------
 #        Configuracion 
 #-----------------------------
-USERS_FILE = './jsons/usuarios.json'
+# Obtenemos el directorio donde está este archivo
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Construimos la ruta al archivo de usuarios
+USERS_FILE = os.path.join(current_dir, 'jsons', 'usuarios.json')
 SALT_LENGTH = 16 # 16 bytes para el salt
 # Parametros para Argon2id
 M_COST = 524288  # Coste de memoria (512 MB ya que la unidad es KB)
@@ -116,7 +119,6 @@ def registrar_usuario(nombre_usuario: str, contraseña: str) -> bool:
     # Verificar si el usuario ya existe
     if nombre_usuario in users:
         logger.warning(f"Error de registro: El usuario '{nombre_usuario}' ya existe.")
-        print("Este usuario ya existe. Por favor inicie sesion.")
         return False
        
     # 5. Almacenar el nombre de usuario y los datos en el diccionario de usuarios
