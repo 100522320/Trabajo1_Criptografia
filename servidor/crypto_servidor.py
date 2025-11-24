@@ -11,8 +11,13 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 
+# Para el manejo de errores de firma
+from cryptography.exceptions import InvalidKey, InvalidSignature
+
 # Utilidades para conversión
 import base64
+
+
 
 # Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
@@ -155,3 +160,41 @@ def desencriptar_mensaje(clave: bytes, mensaje_cifrado: str) -> str:
     except Exception as e:
         logger.error(f"Error durante el descifrado del mensaje: {e}")
         return None
+    
+def deserializar_clave_publica(clave_publica_bytes):
+    """Deserializa una clave pública RSA desde formato PEM"""
+    # Función necesaria para que el servidor almacene la clave del cliente
+    return serialization.load_pem_public_key(clave_publica_bytes)
+
+def verificar_firma(clave_publica, mensaje: str, firma_b64: str) -> bool:
+    """
+    Verifica una firma digital para un mensaje dado usando la clave pública RSA.
+    """
+    try:
+        firma = base64.b64decode(firma_b64.encode('utf-8'))
+        mensaje_bytes = mensaje.encode('utf-8')
+        
+        # 1. Utiliza el método directo .verify() para verificar la firma PSS.
+        clave_publica.verify( 
+            firma,
+            mensaje_bytes,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH 
+            ),
+            hashes.SHA256()
+        )
+
+        logger.info(
+            f"OPERACIÓN: Firma Digital Verificación | ALGORITMO: RSA-PSS (SHA256) | RESULTADO: ÉXITO (Válida)"
+        )
+        return True
+        
+    except InvalidSignature:
+        logger.warning(
+            f"OPERACIÓN: Firma Digital Verificación | ALGORITMO: RSA-PSS (SHA256) | RESULTADO: FALLO (Firma Inválida)"
+        )
+        return False
+    except Exception as e:
+        logger.error(f"Error durante la verificación de la firma digital: {e}")
+        return False

@@ -11,7 +11,7 @@ import ssl
 from crypto_cliente import (
     encriptar_cita, desencriptar_cita, encriptar_mensaje, desencriptar_mensaje,
     generar_par_claves, serializar_clave_publica, deserializar_clave_publica,
-    encriptar_asimetrico
+    encriptar_asimetrico,generar_firma
 )
 
 # AÑADIDO: Obtener el logger configurado en main.py
@@ -313,14 +313,23 @@ def obtener_citas_usuario(usuario: str, clave_comunicacion: bytes) -> dict:
     except:
         return {}
 
-def guardar_cita_servidor(usuario: str, fecha: datetime, motivo_cifrado: str, clave_comunicacion: bytes) -> bool:
-    """Guarda una cita en el servidor"""
+def guardar_cita_servidor(usuario: str, fecha: datetime, motivo_cifrado: str) -> bool:
+    """Guarda una cita en el servidor, incluyendo la firma digital del motivo."""
     api = obtener_cliente()
     if not api:
         raise ConnectionError("No se pudo establecer conexión con el servidor")
     
+    # 1. Generar la firma digital sobre el motivo CIFRADO, usando la clave privada del cliente
+    firma_motivo = generar_firma(api.clave_privada, motivo_cifrado) 
+    if not firma_motivo:
+        logger.error("No se pudo generar la firma para la cita.")
+        return False
+    
     fecha_iso = fecha.isoformat()
-    respuesta = api.enviar_comando(f"GUARDAR_CITA|{usuario}|{fecha_iso}|{motivo_cifrado}")
+
+    # 2. Enviar la firma junto con los demás datos
+    comando = f"GUARDAR_CITA|{usuario}|{fecha_iso}|{motivo_cifrado}|{firma_motivo}"
+    respuesta = api.enviar_comando(comando)
     return respuesta == "CITA_GUARDADA"
 
 def obtener_cita_servidor(usuario: str, fecha: datetime, clave_comunicacion: bytes) -> str:
@@ -449,7 +458,7 @@ def crear_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
         
         motivo_cifrado = encriptar_cita(clave_maestra_K, motivo)
         if motivo_cifrado:
-            if guardar_cita_servidor(usuario_autenticado, fecha, motivo_cifrado, clave_maestra_K):
+            if guardar_cita_servidor(usuario_autenticado, fecha, motivo_cifrado):
                 print("\n¡Cita guardada con éxito!")
             else:
                 print("\nError: No se pudo guardar la cita en el servidor.")
@@ -509,7 +518,7 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
                 return
         
         nuevo_motivo_cifrado = encriptar_cita(clave_maestra_K, motivo_final)
-        if nuevo_motivo_cifrado and guardar_cita_servidor(usuario_autenticado, fecha_final, nuevo_motivo_cifrado, clave_maestra_K):
+        if nuevo_motivo_cifrado and guardar_cita_servidor(usuario_autenticado, fecha_final, nuevo_motivo_cifrado):
             print("\n¡Cita editada con éxito!")
             logger.info(f"Cita editada con éxito para {usuario_autenticado}.")
         else:

@@ -16,6 +16,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 # Utilidades para conversión
 import base64
 
+# Para el manejo de errores de firma
+from cryptography.exceptions import InvalidTag, InvalidSignature
+
 # Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
 
@@ -177,3 +180,66 @@ def desencriptar_cita(clave_maestra_K: bytes, motivo_cifrado: str, fecha: dateti
     except Exception as e:
         logger.error(f"Error durante el descifrado de la cita: {e}")
         return None
+    
+def generar_firma(clave_privada, mensaje: str) -> str:
+    """
+    Genera una firma digital para el mensaje usando la clave privada RSA.
+    Utiliza el esquema PSS con SHA256.
+    """
+    try:
+        mensaje_bytes = mensaje.encode('utf-8')
+        
+        # 1. Firmar usando el método directo .sign() (solución al error 'no attribute signer')
+        firma = clave_privada.sign(
+            mensaje_bytes,
+            padding.PSS( # <--- Esquema PSS
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH 
+            ),
+            hashes.SHA256() # <--- Función de Hash (SHA256)
+        )
+        
+        firma_b64 = base64.b64encode(firma).decode('utf-8')
+        
+        logger.debug(
+            f"OPERACIÓN: Firma Digital Generación | ALGORITMO: RSA-PSS (SHA256) "
+            f"| LONGITUD DE CLAVE: {clave_privada.key_size} bits | LONGITUD DE FIRMA: {len(firma)} bytes."
+        )
+        logger.debug(f"RESULTADO DE LA FIRMA (B64): {firma_b64[:30]}...")
+        
+        return firma_b64
+        
+    except Exception as e:
+        logger.error(f"Error durante la generación de la firma digital: {e}")
+        return None
+
+def verificar_firma(clave_publica, mensaje: str, firma_b64: str) -> bool:
+    """
+    Verifica una firma digital para un mensaje dado usando la clave pública RSA.
+    """
+    try:
+        firma = base64.b64decode(firma_b64.encode('utf-8'))
+        mensaje_bytes = mensaje.encode('utf-8')
+        
+        # 1. Verificar la firma usando el método directo .verify()
+        clave_publica.verify(
+            firma,
+            mensaje_bytes,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+
+        logger.info(
+            f"OPERACIÓN: Firma Digital Verificación | ALGORITMO: RSA-PSS (SHA256) | RESULTADO: ÉXITO (Válida)"
+        )
+        return True
+        
+    except InvalidSignature:
+        # ... (Resto del manejo de error)
+        return False
+    except Exception as e:
+        logger.error(f"Error durante la verificación de la firma digital: {e}")
+        return False

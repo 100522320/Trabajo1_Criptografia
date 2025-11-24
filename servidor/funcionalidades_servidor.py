@@ -8,12 +8,11 @@ import base64
 import socket
 import ssl
 # Importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
-from crypto_servidor import guardar_cita, obtener_cita, borrar_cita_json, load_citas
-from auth import registrar_usuario, autenticar_usuario, derivar_clave
-from crypto_servidor import (
+from crypto_servidor import (guardar_cita, obtener_cita, borrar_cita_json, load_citas,
     generar_par_claves, serializar_clave_publica, desencriptar_asimetrico,
-    encriptar_mensaje, desencriptar_mensaje
-)
+    encriptar_mensaje, desencriptar_mensaje,verificar_firma, deserializar_clave_publica)
+from auth import registrar_usuario, autenticar_usuario, derivar_clave
+
 
 # AÑADIDO: Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
@@ -65,7 +64,7 @@ class Servidor:
             self.clientes_conectados.clear()
             logger.info(f"Se notificó exitosamente a {clientes_notificados} cliente(s)")
         
-    def procesar_comando(self, comando):
+    def procesar_comando(self, comando, clave_publica_cliente=None):
         """Procesa comandos del cliente"""
         try:
             partes = comando.split('|')
@@ -104,7 +103,24 @@ class Servidor:
                 return "ERROR_DERIVACION_CLAVE"
                 
             elif cmd == "GUARDAR_CITA":
-                usuario, fecha_iso, motivo_cifrado = partes[1], partes[2], partes[3]
+                if len(partes) != 5: 
+                    logger.error("Comando GUARDAR_CITA incompleto (falta firma o datos).")
+                    return "ERROR_GUARDAR_CITA"
+                
+                usuario, fecha_iso, motivo_cifrado, firma_motivo = partes[1], partes[2], partes[3], partes[4]
+
+                # Verificacion de firma
+                if not clave_publica_cliente:
+                    logger.error("No se encontró la clave pública del cliente para verificar la firma.")
+                    return "ERROR_GUARDAR_CITA"
+                
+                # Ejecutar la verificación de la firma
+                if not verificar_firma(clave_publica_cliente, motivo_cifrado, firma_motivo):
+                    logger.warning(f"FALLO DE SEGURIDAD: Firma inválida para el usuario {usuario}. Posible manipulación.")
+                    return "ERROR_FIRMA_INVALIDA" 
+            
+                logger.info(f"Firma digital válida para el usuario {usuario}. Procediendo a guardar cita.")
+
                 fecha = datetime.fromisoformat(fecha_iso)
                 exito = guardar_cita(usuario, fecha, motivo_cifrado)
                 return "CITA_GUARDADA" if exito else "ERROR_GUARDAR_CITA"
@@ -140,6 +156,7 @@ class Servidor:
     def manejar_cliente(self, client_socket, addr):
         """Maneja la comunicación con un cliente de forma persistente"""
         clave_sesion = None
+        clave_publica_cliente = None
         
         try:
             logger.info(f"Cliente conectado desde {addr}")
@@ -150,6 +167,12 @@ class Servidor:
             logger.info(f"Fase 1 - Negociación recibida: {comando_negociacion[:100]}...")
             
             if comando_negociacion.startswith("INICIAR_NEGOCIACION|"):
+                # Extraer y guardar la clave pública del cliente
+                partes_neg = comando_negociacion.split('|', 1)
+                if len(partes_neg) > 1:
+                 clave_publica_cliente_bytes = partes_neg[1].encode('utf-8')
+                 clave_publica_cliente = deserializar_clave_publica(clave_publica_cliente_bytes) 
+
                 respuesta = self.procesar_comando(comando_negociacion)
                 client_socket.send(respuesta.encode('utf-8'))
                 
@@ -217,7 +240,7 @@ class Servidor:
                         break
                     
                     # Procesar comando
-                    respuesta = self.procesar_comando(comando)
+                    respuesta = self.procesar_comando(comando, clave_publica_cliente)
                     logger.info(f"Respuesta generada: {respuesta[:100]}...")
                     
                     # Cifrar respuesta con AES-GCM
