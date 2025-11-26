@@ -300,7 +300,7 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str) -> bytes |
         logger.error(f"Error en derivar_clave: {e}")
         return None
 
-def obtener_citas_usuario(usuario: str, clave_comunicacion: bytes) -> dict:
+def obtener_citas_usuario(usuario: str) -> dict:
     """Obtiene todas las citas del usuario desde el servidor"""
     api = obtener_cliente()
     if not api:
@@ -332,7 +332,7 @@ def guardar_cita_servidor(usuario: str, fecha: datetime, motivo_cifrado: str) ->
     respuesta = api.enviar_comando(comando)
     return respuesta == "CITA_GUARDADA"
 
-def obtener_cita_servidor(usuario: str, fecha: datetime, clave_comunicacion: bytes) -> str:
+def obtener_cita_servidor(usuario: str, fecha: datetime) -> str:
     """Obtiene una cita específica del servidor"""
     api = obtener_cliente()
     if not api:
@@ -342,7 +342,7 @@ def obtener_cita_servidor(usuario: str, fecha: datetime, clave_comunicacion: byt
     respuesta = api.enviar_comando(f"OBTENER_CITA|{usuario}|{fecha_iso}")
     return respuesta if respuesta != "CITA_NO_ENCONTRADA" else None
 
-def borrar_cita_servidor(usuario: str, fecha: datetime, clave_comunicacion: bytes) -> bool:
+def borrar_cita_servidor(usuario: str, fecha: datetime) -> bool:
     """Elimina una cita del servidor"""
     api = obtener_cliente()
     if not api:
