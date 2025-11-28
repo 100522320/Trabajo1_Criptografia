@@ -53,5 +53,10 @@
         "nombre_usuario": "hola",
         "salt": "x6w7NqPv2G4ZFKHr9lI/Zw==",
         "hash": "Q00oyncTX2iGfAZ1QA3qNUEiiIeEj25hkSOH67Nq788="
+    },
+    "Christian": {
+        "nombre_usuario": "Christian",
+        "salt": "8UOOg37n9rGD764xQckUAg==",
+        "hash": "tC265ltxUUyM2RzFLZ9Krb2Db+tl7uOgQU21AOatyw8="
     }
 }

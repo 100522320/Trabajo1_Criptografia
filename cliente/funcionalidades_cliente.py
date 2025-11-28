@@ -11,7 +11,7 @@ import ssl
 from crypto_cliente import (
     encriptar_cita, desencriptar_cita, encriptar_mensaje, desencriptar_mensaje,
     generar_par_claves, serializar_clave_publica, deserializar_clave_publica,
-    encriptar_asimetrico,generar_firma
+    encriptar_asimetrico, verificar_firma
 )
 
 # AÑADIDO: Obtener el logger configurado en main.py
@@ -300,35 +300,53 @@ def derivar_clave(contraseña_maestra: str, usuario_autenticado: str) -> bytes |
         logger.error(f"Error en derivar_clave: {e}")
         return None
 
-def obtener_citas_usuario(usuario: str) -> dict:
-    """Obtiene todas las citas del usuario desde el servidor"""
+def obtener_citas_usuario(usuario: str) -> tuple[dict, str]:
+    """
+    Obtiene citas, verifica la firma del servidor y devuelve (citas, firma).
+    """
     api = obtener_cliente()
     if not api:
         raise ConnectionError("No se pudo establecer conexión con el servidor")
     
     respuesta = api.enviar_comando(f"OBTENER_CITAS|{usuario}")
     
+    if not respuesta or respuesta == "ERROR_FIRMA_SERVIDOR":
+        logger.error("Error al recibir citas o firma del servidor.")
+        return {}, ""
+
     try:
-        return json.loads(respuesta) if respuesta else {}
-    except:
-        return {}
+        # Esperamos formato: JSON|FIRMA
+        if "|" not in respuesta:
+            logger.error("Formato de respuesta inválido (falta separador de firma).")
+            return {}, ""
+
+        # Separamos por el último pipe
+        json_citas_str, firma_b64 = respuesta.rsplit('|', 1)
+        
+        # VERIFICAR FIRMA usando la clave pública del SERVIDOR
+        if verificar_firma(api.clave_publica_servidor, json_citas_str, firma_b64):
+            logger.info("Firma del servidor VERIFICADA correctamente. Datos íntegros.")
+            return json.loads(json_citas_str), firma_b64
+        else:
+            logger.critical("FALLO DE SEGURIDAD: La firma del servidor es INVÁLIDA.")
+            print("\nALERTA: Los datos recibidos no provienen del servidor legítimo o han sido manipulados.")
+            return {}, ""
+            
+    except Exception as e:
+        logger.error(f"Error procesando citas recibidas: {e}")
+        return {}, ""
 
 def guardar_cita_servidor(usuario: str, fecha: datetime, motivo_cifrado: str) -> bool:
-    """Guarda una cita en el servidor, incluyendo la firma digital del motivo."""
+    """Guarda una cita en el servidor."""
+
     api = obtener_cliente()
     if not api:
         raise ConnectionError("No se pudo establecer conexión con el servidor")
     
-    # 1. Generar la firma digital sobre el motivo CIFRADO, usando la clave privada del cliente
-    firma_motivo = generar_firma(api.clave_privada, motivo_cifrado) 
-    if not firma_motivo:
-        logger.error("No se pudo generar la firma para la cita.")
-        return False
-    
+    # Enviamos comando
     fecha_iso = fecha.isoformat()
+    comando = f"GUARDAR_CITA|{usuario}|{fecha_iso}|{motivo_cifrado}"
 
-    # 2. Enviar la firma junto con los demás datos
-    comando = f"GUARDAR_CITA|{usuario}|{fecha_iso}|{motivo_cifrado}|{firma_motivo}"
     respuesta = api.enviar_comando(comando)
     return respuesta == "CITA_GUARDADA"
 
@@ -398,13 +416,38 @@ def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
             print("Por favor, inténtelo de nuevo.")
 
 def ver_citas_pendientes(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
+    '''Creamos un .txt con la firma y citas pendientes e imprimimos por pantalla las citas.'''
     try:
-        citas = obtener_citas_usuario(usuario_autenticado, clave_maestra_K)
+        # Obtenemos citas y la firma válida
+        citas, firma_digital = obtener_citas_usuario(usuario_autenticado)
+        
         if not citas:
-            logger.info(f"Usuario {usuario_autenticado} no tiene citas guardadas.")
+            logger.info(f"Usuario {usuario_autenticado} sin citas o error de verificación.")
             print("\nNo tiene ninguna cita guardada.")
             return
 
+        # Guardar en fichero de texto
+        archivo_salida = f"citas_{usuario_autenticado}.txt"
+        try:
+            with open(archivo_salida, "w", encoding="utf-8") as f:
+                f.write(f"--- REPORTE DE CITAS PARA: {usuario_autenticado} ---\n")
+                f.write(f"Fecha de descarga: {datetime.now()}\n")
+                f.write("-" * 40 + "\n\n")
+                f.write("DATOS (JSON):\n")
+                f.write(json.dumps(citas, indent=4))
+                f.write("\n\n" + "-" * 40 + "\n")
+                f.write("FIRMA DIGITAL DEL SERVIDOR (Verificada):\n")
+                f.write(firma_digital)
+                f.write("\n" + "-" * 40 + "\n")
+            
+            logger.info(f"Citas y firma guardadas en {archivo_salida}")
+            print(f"\n[INFO] Se ha generado el archivo '{archivo_salida}' con las citas firmadas.")
+
+        except Exception as e:
+            logger.error(f"Error escribiendo archivo .txt: {e}")
+            print(f"\n[ERROR] No se pudo crear el archivo de respaldo.")
+
+        # Mostrar por pantalla
         citas_pendientes = []
         print("\n--- TUS CITAS PENDIENTES ---")
 
@@ -418,7 +461,6 @@ def ver_citas_pendientes(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
                     citas_pendientes.append((fecha_cita, "[ERROR AL LEER MOTIVO]"))
 
         if not citas_pendientes:
-            logger.info(f"Usuario {usuario_autenticado} no tiene citas pendientes.")
             print("No tiene citas pendientes.")
             return
 
@@ -428,6 +470,7 @@ def ver_citas_pendientes(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
             print(f"{i+1}. {fecha.strftime('%d/%m/%Y a las %H:%M')} -> {motivo}")
 
         print(f"\nTotal: {len(citas_pendientes)} cita(s) pendiente(s).")
+
     except ConnectionError:
         raise
     except Exception as e:

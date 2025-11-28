@@ -10,7 +10,7 @@ import ssl
 # Importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
 from crypto_servidor import (guardar_cita, obtener_cita, borrar_cita_json, load_citas,
     generar_par_claves, serializar_clave_publica, desencriptar_asimetrico,
-    encriptar_mensaje, desencriptar_mensaje,verificar_firma, deserializar_clave_publica)
+    encriptar_mensaje, desencriptar_mensaje,generar_firma, deserializar_clave_publica)
 from auth import registrar_usuario, autenticar_usuario, derivar_clave
 
 
@@ -103,33 +103,36 @@ class Servidor:
                 return "ERROR_DERIVACION_CLAVE"
                 
             elif cmd == "GUARDAR_CITA":
-                if len(partes) != 5: 
-                    logger.error("Comando GUARDAR_CITA incompleto (falta firma o datos).")
+                
+                if len(partes) != 4: 
+                    logger.error("Comando GUARDAR_CITA incompleto.")
                     return "ERROR_GUARDAR_CITA"
                 
-                usuario, fecha_iso, motivo_cifrado, firma_motivo = partes[1], partes[2], partes[3], partes[4]
-
-                # Verificacion de firma
-                if not clave_publica_cliente:
-                    logger.error("No se encontró la clave pública del cliente para verificar la firma.")
-                    return "ERROR_GUARDAR_CITA"
+                usuario, fecha_iso, motivo_cifrado = partes[1], partes[2], partes[3]
                 
-                # Ejecutar la verificación de la firma
-                if not verificar_firma(clave_publica_cliente, motivo_cifrado, firma_motivo):
-                    logger.warning(f"FALLO DE SEGURIDAD: Firma inválida para el usuario {usuario}. Posible manipulación.")
-                    return "ERROR_FIRMA_INVALIDA" 
-            
-                logger.info(f"Firma digital válida para el usuario {usuario}. Procediendo a guardar cita.")
-
+                logger.info(f"Solicitud de guardar cita para {usuario} recibida.")
                 fecha = datetime.fromisoformat(fecha_iso)
                 exito = guardar_cita(usuario, fecha, motivo_cifrado)
                 return "CITA_GUARDADA" if exito else "ERROR_GUARDAR_CITA"
-                
+            
             elif cmd == "OBTENER_CITAS":
                 usuario = partes[1]
                 citas = load_citas()
                 usuario_citas = citas.get(usuario, {})
-                return json.dumps(usuario_citas)
+                
+                # Serializamos a JSON
+                json_citas = json.dumps(usuario_citas)
+                
+                # AHORA EL SERVIDOR FIRMA LOS DATOS
+                firma_servidor = generar_firma(json_citas)
+                
+                if firma_servidor:
+                    logger.info(f"Citas obtenidas y firmadas para {usuario}.")
+                    # Devolvemos: DATOS | FIRMA
+                    return f"{json_citas}|{firma_servidor}"
+                else:
+                    logger.error("No se pudo firmar la respuesta de citas.")
+                    return "ERROR_FIRMA_SERVIDOR"
                 
             elif cmd == "OBTENER_CITA":
                 usuario, fecha_iso = partes[1], partes[2]

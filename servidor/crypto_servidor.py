@@ -166,17 +166,20 @@ def deserializar_clave_publica(clave_publica_bytes):
     # Función necesaria para que el servidor almacene la clave del cliente
     return serialization.load_pem_public_key(clave_publica_bytes)
 
-def verificar_firma(clave_publica, mensaje: str, firma_b64: str) -> bool:
+    
+def generar_firma(mensaje: str) -> str:
     """
-    Verifica una firma digital para un mensaje dado usando la clave pública RSA.
+    Genera una firma digital para el mensaje usando la clave privada del servidor.
     """
     try:
-        firma = base64.b64decode(firma_b64.encode('utf-8'))
+        if clave_privada_servidor is None:
+            logger.error("Clave privada del servidor no inicializada.")
+            return None
+            
         mensaje_bytes = mensaje.encode('utf-8')
         
-        # 1. Utiliza el método directo .verify() para verificar la firma PSS.
-        clave_publica.verify( 
-            firma,
+        # Firmamos usando PSS y SHA256
+        firma = clave_privada_servidor.sign(
             mensaje_bytes,
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
@@ -184,17 +187,11 @@ def verificar_firma(clave_publica, mensaje: str, firma_b64: str) -> bool:
             ),
             hashes.SHA256()
         )
-
-        logger.info(
-            f"OPERACIÓN: Firma Digital Verificación | ALGORITMO: RSA-PSS (SHA256) | RESULTADO: ÉXITO (Válida)"
-        )
-        return True
         
-    except InvalidSignature:
-        logger.warning(
-            f"OPERACIÓN: Firma Digital Verificación | ALGORITMO: RSA-PSS (SHA256) | RESULTADO: FALLO (Firma Inválida)"
-        )
-        return False
+        firma_b64 = base64.b64encode(firma).decode('utf-8')
+        logger.debug(f"Firma generada por el servidor. Longitud: {len(firma)} bytes.")
+        return firma_b64
+        
     except Exception as e:
-        logger.error(f"Error durante la verificación de la firma digital: {e}")
-        return False
+        logger.error(f"Error durante la generación de la firma en servidor: {e}")
+        return None
