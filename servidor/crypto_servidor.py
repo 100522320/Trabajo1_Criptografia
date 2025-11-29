@@ -35,22 +35,46 @@ LONGITUD_AES_NONCE = 12
 clave_privada_servidor = None
 clave_publica_servidor = None
 
-def generar_par_claves():
-    """Genera par de claves RSA para el servidor"""
-    global clave_privada_servidor, clave_publica_servidor
-    clave_privada_servidor = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-    )
-    clave_publica_servidor = clave_privada_servidor.public_key()
-    logger.info("Par de claves RSA-2048 generadas para el servidor")
+def cargar_certificado_servidor(ruta_certificado='certificado_servidor/Acert.pem'):
+    """
+    Lee el certificado del servidor desde el archivo PEM y lo devuelve como bytes.
+    """
+    try:
+        ruta_completa = os.path.join(os.path.dirname(__file__), ruta_certificado)
+        with open(ruta_completa, 'rb') as f:
+            cert_pem_bytes = f.read()
+        logger.info(f"Certificado del servidor cargado desde {ruta_certificado}")
+        return cert_pem_bytes
+    except Exception as e:
+        logger.error(f"Error cargando certificado del servidor: {e}")
+        return None
 
-def serializar_clave_publica():
-    """Serializa la clave pública del servidor a formato PEM"""
-    return clave_publica_servidor.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    )
+def generar_par_claves():
+    """
+    Carga la clave privada del servidor desde archivo PEM.
+    """
+    global clave_privada_servidor, clave_publica_servidor
+    
+    try:
+        ruta_clave_privada = os.path.join(
+            os.path.dirname(__file__), 
+            'certificado_servidor/Akey.pem'
+        )
+        with open(ruta_clave_privada, 'rb') as f:
+            clave_privada_servidor = serialization.load_pem_private_key(
+                f.read(),
+                password="C0ntr4s3ñ4!".encode('utf-8')
+            )
+        
+        # Derivar la clave pública de la clave privada (para uso interno)
+        clave_publica_servidor = clave_privada_servidor.public_key()
+        
+        logger.info("Clave privada del servidor cargada")
+        logger.info("Par de claves RSA-2048 inicializado desde archivo PEM")
+        return True
+    except Exception as e:
+        logger.error(f"Error cargando clave privada: {e}")
+        return False
 
 def desencriptar_asimetrico(mensaje_cifrado: str) -> str:
     """Descifra un mensaje con la clave privada del servidor (RSA-OAEP)"""
@@ -160,11 +184,6 @@ def desencriptar_mensaje(clave: bytes, mensaje_cifrado: str) -> str:
     except Exception as e:
         logger.error(f"Error durante el descifrado del mensaje: {e}")
         return None
-    
-def deserializar_clave_publica(clave_publica_bytes):
-    """Deserializa una clave pública RSA desde formato PEM"""
-    # Función necesaria para que el servidor almacene la clave del cliente
-    return serialization.load_pem_public_key(clave_publica_bytes)
 
     
 def generar_firma(mensaje: str) -> str:

@@ -9,8 +9,8 @@ import socket
 import ssl
 # Importamos de crypto.py algunas funciones para encriptar y desencriptar las citas
 from crypto_servidor import (guardar_cita, obtener_cita, borrar_cita_json, load_citas,
-    generar_par_claves, serializar_clave_publica, desencriptar_asimetrico,
-    encriptar_mensaje, desencriptar_mensaje,generar_firma, deserializar_clave_publica)
+    generar_par_claves, desencriptar_asimetrico, encriptar_mensaje, desencriptar_mensaje,
+    generar_firma, cargar_certificado_servidor)
 from auth import registrar_usuario, autenticar_usuario, derivar_clave
 
 
@@ -26,7 +26,10 @@ class Servidor:
         self.clientes_lock = threading.Lock()
         self.servidor_activo = True
         # Generar claves RSA al inicializar
-        generar_par_claves()
+        if not generar_par_claves():
+            logger.critical("No se pudo cargar la clave privada del servidor")
+            raise RuntimeError("No se pudo inicializar el servidor")
+        
         logger.info("Servidor inicializado con cifrado híbrido RSA+AES")
     
     def agregar_cliente(self, client_socket):
@@ -64,7 +67,7 @@ class Servidor:
             self.clientes_conectados.clear()
             logger.info(f"Se notificó exitosamente a {clientes_notificados} cliente(s)")
         
-    def procesar_comando(self, comando, clave_publica_cliente=None):
+    def procesar_comando(self, comando):
         """Procesa comandos del cliente"""
         try:
             partes = comando.split('|')
@@ -73,8 +76,14 @@ class Servidor:
             if cmd == "INICIAR_NEGOCIACION":
                 clave_publica_cliente_bytes = partes[1].encode('utf-8') if len(partes) > 1 else None
                 if clave_publica_cliente_bytes:
-                    clave_publica_servidor = serializar_clave_publica()
-                    return "CLAVE_PUBLICA_SERVIDOR|" + clave_publica_servidor.decode('utf-8')
+                    # Leer el certificado directamente del archivo
+                    certificado_pem_bytes = cargar_certificado_servidor()
+                    
+                    if certificado_pem_bytes:
+                        return "CERTIFICADO_SERVIDOR|" + certificado_pem_bytes.decode('utf-8')
+                    else:
+                        logger.error("Error cargando certificado del servidor")
+                        return "ERROR_NEGOCIACION"
                 return "ERROR_NEGOCIACION"
                 
             elif cmd == "CLAVE_SESION_CIFRADA":
@@ -170,11 +179,6 @@ class Servidor:
             logger.info(f"Fase 1 - Negociación recibida: {comando_negociacion[:100]}...")
             
             if comando_negociacion.startswith("INICIAR_NEGOCIACION|"):
-                # Extraer y guardar la clave pública del cliente
-                partes_neg = comando_negociacion.split('|', 1)
-                if len(partes_neg) > 1:
-                 clave_publica_cliente_bytes = partes_neg[1].encode('utf-8')
-                 clave_publica_cliente = deserializar_clave_publica(clave_publica_cliente_bytes) 
 
                 respuesta = self.procesar_comando(comando_negociacion)
                 client_socket.send(respuesta.encode('utf-8'))
@@ -243,7 +247,7 @@ class Servidor:
                         break
                     
                     # Procesar comando
-                    respuesta = self.procesar_comando(comando, clave_publica_cliente)
+                    respuesta = self.procesar_comando(comando)
                     logger.info(f"Respuesta generada: {respuesta[:100]}...")
                     
                     # Cifrar respuesta con AES-GCM

@@ -10,8 +10,8 @@ import ssl
 # Importamos de crypto.py las funciones relacionadas con la seeguridad
 from crypto_cliente import (
     encriptar_cita, desencriptar_cita, encriptar_mensaje, desencriptar_mensaje,
-    generar_par_claves, serializar_clave_publica, deserializar_clave_publica,
-    encriptar_asimetrico, verificar_firma
+    generar_par_claves, serializar_clave_publica, encriptar_asimetrico, verificar_firma, 
+    cargar_cadena_certificacion, verificar_certificado
 )
 
 # AÑADIDO: Obtener el logger configurado en main.py
@@ -95,15 +95,41 @@ class ClienteAPI:
             logger.info("Enviando clave pública al servidor...")
             self.socket.send(b"INICIAR_NEGOCIACION|" + clave_publica_cliente_bytes)
             
-            # 3. Recibir clave pública del servidor
-            respuesta = self.socket.recv(4096)
-            logger.debug(f"Respuesta recibida: {respuesta[:100]}...")
+            # 3. Recibir CERTIFICADO del servidor (en lugar de solo la clave pública)
+            respuesta = self.socket.recv(8192)
+            logger.debug(f"Respuesta recibida del servidor...")
             
-            if b"CLAVE_PUBLICA_SERVIDOR|" in respuesta:
+            if b"CERTIFICADO_SERVIDOR|" in respuesta:
                 partes = respuesta.split(b"|", 1)
-                clave_publica_servidor_bytes = partes[1]
-                self.clave_publica_servidor = deserializar_clave_publica(clave_publica_servidor_bytes)
-                logger.info("Clave pública del servidor recibida")
+                certificado_servidor_pem = partes[1]
+                
+                logger.info("Certificado del servidor recibido. Iniciando verificación...")
+                
+                # Cargar cadena de confianza (AC1 y AC2)
+                cert_ac1, cert_ac2 = cargar_cadena_certificacion()
+                
+                if cert_ac1 is None or cert_ac2 is None:
+                    logger.error("No se pudo cargar la cadena de confianza")
+                    print("\n❌ ERROR: No se encontraron los certificados de las ACs")
+                    return False
+                
+                # Verificar el certificado del servidor
+                verificado, clave_publica_servidor = verificar_certificado(
+                    certificado_servidor_pem, 
+                    cert_ac1, 
+                    cert_ac2
+                )
+                
+                if not verificado or clave_publica_servidor is None:
+                    logger.error("FALLO EN LA VERIFICACIÓN DEL CERTIFICADO")
+                    print("\n❌ ALERTA DE SEGURIDAD: El certificado del servidor NO es válido")
+                    print("La conexión se ha abortado por seguridad.")
+                    return False
+                
+                # Certificado verificado correctamente
+                self.clave_publica_servidor = clave_publica_servidor
+                logger.info("✓ Certificado verificado exitosamente")
+                print("✓ Certificado del servidor verificado correctamente")
                 
                 # 4. Generar clave de sesión AES y cifrarla con RSA
                 clave_sesion = os.urandom(32)  # 256 bits para AES-256
@@ -390,7 +416,7 @@ def aplicacion(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
                 case '3':
                     editar_cita(usuario_autenticado,clave_maestra_K)
                 case '4':
-                    eliminar_cita(usuario_autenticado, clave_maestra_K)
+                    eliminar_cita(usuario_autenticado)
                 case '5':
                     logger.info("El usuario ha salido de la aplicación.")
                     print("Que tenga un buen dia.")
@@ -524,7 +550,7 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
             print("Formato de fecha incorrecto.")
             return
         
-        motivo_cifrado_antiguo = obtener_cita_servidor(usuario_autenticado, fecha_antigua, clave_maestra_K)
+        motivo_cifrado_antiguo = obtener_cita_servidor(usuario_autenticado, fecha_antigua)
         if motivo_cifrado_antiguo is None:
             logger.warning(f"Intento de editar cita no encontrada para {usuario_autenticado} en {fecha_antigua.isoformat()}")
             print("No se ha encontrado ninguna cita en esa fecha.")
@@ -547,7 +573,7 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
                 print("Formato de nueva fecha incorrecto. Se cancela la edición.")
                 return
         
-        if not borrar_cita_servidor(usuario_autenticado, fecha_antigua, clave_maestra_K):
+        if not borrar_cita_servidor(usuario_autenticado, fecha_antigua):
             logger.error("Error crítico al intentar eliminar la cita antigua para edición.")
             print("Error: No se pudo eliminar la cita antigua para actualizarla.")
             return
@@ -573,7 +599,7 @@ def editar_cita(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
         logger.error(f"Error al editar cita: {e}")
         print(f"Error al editar la cita: {e}")
 
-def eliminar_cita(usuario_autenticado:str, clave_maestra_K: bytes)-> None:
+def eliminar_cita(usuario_autenticado:str)-> None:
     try:
         fecha_str = input("¿En qué fecha y hora es la cita que desea eliminar? (DD/MM/YYYY hh:mm): ")
         try:
@@ -583,7 +609,7 @@ def eliminar_cita(usuario_autenticado:str, clave_maestra_K: bytes)-> None:
             print("Formato de fecha incorrecto.")
             return
             
-        if borrar_cita_servidor(usuario_autenticado, fecha_a_eliminar, clave_maestra_K):
+        if borrar_cita_servidor(usuario_autenticado, fecha_a_eliminar):
             print("\n¡Cita eliminada con éxito!")
             logger.info(f"Cita eliminada exitosamente para {usuario_autenticado} en {fecha_a_eliminar.isoformat()}.")
         else:
