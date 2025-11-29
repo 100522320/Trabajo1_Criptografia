@@ -19,6 +19,9 @@ import base64
 # Para el manejo de errores de firma
 from cryptography.exceptions import InvalidTag, InvalidSignature
 
+# Para la lectura de certificados
+from cryptography import x509
+
 # Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
 
@@ -26,6 +29,130 @@ logger = logging.getLogger('SecureCitasCLI')
 #        Configuracion 
 #-----------------------------
 LONGITUD_AES_NONCE = 12
+
+def cargar_cadena_certificacion(ruta_ac1='certificados_AC/ac1cert.pem', ruta_ac2='certificados_AC/ac2cert.pem'):
+    """
+    Carga los certificados de la cadena de certificación
+    """
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Cargar AC1 (raíz)
+        ruta_completa_ac1 = os.path.join(current_dir, ruta_ac1)
+        with open(ruta_completa_ac1, 'rb') as f:
+            cert_ac1 = x509.load_pem_x509_certificate(f.read())
+        logger.info(f"Certificado de AC1 (raíz) cargado desde {ruta_ac1}")
+        
+        # Cargar AC2 (intermedia)
+        ruta_completa_ac2 = os.path.join(current_dir, ruta_ac2)
+        with open(ruta_completa_ac2, 'rb') as f:
+            cert_ac2 = x509.load_pem_x509_certificate(f.read())
+        logger.info(f"Certificado de AC2 (subordinada) cargado desde {ruta_ac2}")
+        
+        logger.info("Cadena de confianza cargada correctamente (AC1 y AC2)")
+        return cert_ac1, cert_ac2
+    except FileNotFoundError as e:
+        logger.error(f"No se encontró el archivo de certificado: {e}")
+        return None, None
+    except Exception as e:
+        logger.error(f"Error cargando cadena de confianza: {e}")
+        return None, None
+
+def verificar_certificado(cert_servidor_pem, cert_ac1, cert_ac2):
+    """
+    Verifica el certificado del servidor usando la cadena de certificación
+    
+    Pasos de la validación de la cadena de certificación:
+    1. Verificar que AC1 es autofirmado (raíz confiable)
+    2. Verificar que AC2 está firmado por AC1
+    3. Verificar que el certificado del servidor está firmado por AC2
+    4. Verificar fechas de validez
+    """
+    try:
+        # Cargar certificado del servidor
+        cert_servidor = x509.load_pem_x509_certificate(cert_servidor_pem)
+        
+        logger.info("=" * 60)
+        logger.info("INICIANDO VERIFICACIÓN DE CERTIFICADO DEL SERVIDOR")
+        logger.info("=" * 60)
+        logger.info(f"Dueño del certificado: {cert_servidor.subject}")
+        logger.info(f"Emisor del certificado: {cert_servidor.issuer}")
+        
+        # 1. Verificar que AC1 es autofirmado (raíz)
+        logger.info("\nVerificando AC1 (raíz autofirmada)...")
+        try:
+            clave_publica_ac1 = cert_ac1.public_key()
+            clave_publica_ac1.verify(
+                cert_ac1.signature,
+                cert_ac1.tbs_certificate_bytes,
+                padding.PKCS1v15(),
+                cert_ac1.signature_hash_algorithm
+            )
+            logger.info("✓ AC1 verificado como certificado raíz autofirmado")
+        except Exception as e:
+            logger.error(f"✗ AC1 no es un certificado raíz válido: {e}")
+            return False, None
+        
+        # 2. Verificar que AC2 está firmado por AC1
+        logger.info("\nVerificando AC2 (firmada por AC1)...")
+        try:
+            clave_publica_ac1.verify(
+                cert_ac2.signature,
+                cert_ac2.tbs_certificate_bytes,
+                padding.PKCS1v15(),
+                cert_ac2.signature_hash_algorithm
+            )
+            logger.info("✓ AC2 verificada correctamente (firmada por AC1)")
+        except Exception as e:
+            logger.error(f"✗ AC2 no está firmada correctamente por AC1: {e}")
+            return False, None
+        
+        # 3. Verificar que el certificado del servidor está firmado por AC2
+        logger.info("\nVerificando certificado del servidor (firmado por AC2)...")
+        try:
+            clave_publica_ac2 = cert_ac2.public_key()
+            clave_publica_ac2.verify(
+                cert_servidor.signature,
+                cert_servidor.tbs_certificate_bytes,
+                padding.PKCS1v15(),
+                cert_servidor.signature_hash_algorithm
+            )
+            logger.info("✓ Certificado del servidor verificado (firmado por AC2)")
+        except Exception as e:
+            logger.error(f"✗ Certificado del servidor no está firmado por AC2: {e}")
+            return False, None
+        
+        # 4. Verificar fechas de validez
+        logger.info("\nVerificando fechas de validez...")
+        from datetime import datetime, timezone
+        ahora = datetime.now(timezone.utc)
+        
+        logger.info(f"Válido desde: {cert_servidor.not_valid_before_utc}")
+        logger.info(f"Válido hasta: {cert_servidor.not_valid_after_utc}")
+        logger.info(f"Fecha actual: {ahora}")
+        
+        if ahora < cert_servidor.not_valid_before_utc:
+            logger.error("✗ El certificado aún no es válido")
+            return False, None
+        
+        if ahora > cert_servidor.not_valid_after_utc:
+            logger.error("✗ El certificado ha expirado")
+            return False, None
+        
+        logger.info("✓ Fechas de validez correctas")
+        
+        # Extraer clave pública del certificado verificado
+        clave_publica_servidor = cert_servidor.public_key()
+        
+        logger.info("=" * 60)
+        logger.info("✓ CERTIFICADO DEL SERVIDOR VERIFICADO EXITOSAMENTE")
+        logger.info("=" * 60)
+        
+        return True, clave_publica_servidor
+        
+    except Exception as e:
+        logger.error(f"Error durante la verificación del certificado: {e}")
+        return False, None
 
 def generar_par_claves():
     """Genera un par de claves RSA para el cliente"""
