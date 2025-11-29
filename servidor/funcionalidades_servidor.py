@@ -14,7 +14,7 @@ from crypto_servidor import (guardar_cita, obtener_cita, borrar_cita_json, load_
 from auth import registrar_usuario, autenticar_usuario, derivar_clave
 
 
-# AÑADIDO: Obtener el logger configurado en main.py
+# Obtener el logger configurado en main.py
 logger = logging.getLogger('SecureCitasCLI')
 
 
@@ -168,7 +168,6 @@ class Servidor:
     def manejar_cliente(self, client_socket, addr):
         """Maneja la comunicación con un cliente de forma persistente"""
         clave_sesion = None
-        clave_publica_cliente = None
         
         try:
             logger.info(f"Cliente conectado desde {addr}")

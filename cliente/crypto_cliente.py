@@ -333,7 +333,6 @@ def verificar_firma(clave_publica, mensaje: str, firma_b64: str) -> bool:
         return True
         
     except InvalidSignature:
-        # ... (Resto del manejo de error)
         return False
     except Exception as e:
         logger.error(f"Error durante la verificación de la firma digital: {e}")

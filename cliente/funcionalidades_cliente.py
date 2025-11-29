@@ -343,7 +343,7 @@ def obtener_citas_usuario(usuario: str) -> tuple[dict, str]:
     try:
         # Esperamos formato: JSON|FIRMA
         if "|" not in respuesta:
-            logger.error("Formato de respuesta inválido (falta separador de firma).")
+            logger.error("Formato de respuesta inválido.")
             return {}, ""
 
         # Separamos por el último pipe

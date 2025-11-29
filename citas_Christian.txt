@@ -1,5 +1,5 @@
 --- REPORTE DE CITAS PARA: Christian ---
-Fecha de descarga: 2025-11-28 15:28:33.054925
+Fecha de descarga: 2025-11-29 09:26:08.653012
 ----------------------------------------
 
 DATOS (JSON):
@@ -10,5 +10,5 @@ DATOS (JSON):
 
 ----------------------------------------
 FIRMA DIGITAL DEL SERVIDOR (Verificada):
-O4JqNP/7xGcjCjBYumo7z7XqqJocbmqo16X3zQvDaRO1dXdVT+KTcMrakfDsIj4JAO2x1sA/xsJVtUkbsSfDUWTucdnc8Gif4RIm00WnQNTNzmDKZPBhvfH7reYrJoEGaSMcd2W7iuunrbBwXMvLICPWiPAiMN14zvEsWvWkWUGU7JThnsEKgX/Iefo5rmm7iww59GPn+N5xzNOM4irzACDxFoLNS9t3ltuogmz3ojp4AAeg82sk+CiJspjF1107xhEn+QfwZOOwk5Da8GVed3NM6UNXSWdklks1n0ahMwTXfnsXh5rPETXxkXmSk6i+u9FhKZofDDl8/1VPhK71+w==
+STT10TSJgWOzM8j2YIK9N+pjE4cXncGtDHFJJ3Z59aiIw4cQ6TZNAqhDyrI+zPqbNezqzuIrCmu+yP6JUrjpUfbmcpwB2OLhy/qKFBIY0NwYoQOxFc91hWo7xBJx+YXVsNZ5UOCAeIHVhzigVhYuRpk2vDu3JNwtPN7zps8eNqU=
 ----------------------------------------
