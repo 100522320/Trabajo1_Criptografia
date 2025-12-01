@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Archivos de citas de usuarios
+cliente/citas_*.txt
+
 # Distribution / packaging
 .Python
 build/

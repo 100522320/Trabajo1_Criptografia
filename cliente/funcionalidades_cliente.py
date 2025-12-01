@@ -453,7 +453,8 @@ def ver_citas_pendientes(usuario_autenticado:str ,clave_maestra_K:bytes)-> None:
             return
 
         # Guardar en fichero de texto
-        archivo_salida = f"citas_{usuario_autenticado}.txt"
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        archivo_salida = os.path.join(current_dir, f"citas_{usuario_autenticado}.txt")
         try:
             with open(archivo_salida, "w", encoding="utf-8") as f:
                 f.write(f"--- REPORTE DE CITAS PARA: {usuario_autenticado} ---\n")
