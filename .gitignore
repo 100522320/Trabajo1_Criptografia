@@ -7,7 +7,7 @@ __pycache__/
 *.so
 
 # Archivos de citas de usuarios
-cliente/citas_*.txt
+**/citas_*.txt
 
 # Distribution / packaging
 .Python
