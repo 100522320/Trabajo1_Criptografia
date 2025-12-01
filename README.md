@@ -13,7 +13,8 @@ Asegúrese de tener instalado:
 
 ### 2. Configuración del Entorno Virtual
 
-Es altamente recomendable crear y activar un entorno virtual para aislar las dependencias del proyecto, ya que el script principal ('main.py') intenta cargarlo automáticamente.
+Es altamente recomendable crear y activar un entorno virtual para aislar las dependencias del proyecto, ya que el script principal tanto del cliente 
+como del servidor ('main.py') intenta cargarlo automáticamente.
 
 1.  **Crear el entorno virtual** (nombrado '.venv'):
     '''bash
@@ -42,8 +43,25 @@ pip install -r requirements.txt'''
 
 ### 4. Ejecución del programa
 
-Ejecute el archivo 'main.py' de la siguiente forma:
+Inicie dos terminales distintas utilizando los botones "Terminal" -> "New Terminal"
+
+En la primera de las terminales, posiciónese en la carpeta servidor:
+
+'''cd servidor'''
+
+Una vez se encuentre en la carpeta servidor, ejecute el archivo main.py de la siguiente forma:
 
 '''python main.py'''
 
-Tambien puede hacer directamente run de este archivo. 
+Antes de iniciarse, el servidor solicitará por terminal que se introduzca la passphrase de su clave privada, 
+donde habrá que introducir exactamente la siguiente contraseña:
+
+C0ntr4s3ñ4!
+
+En la segunda de las terminales, posiciónese en la carpeta cliente:
+
+'''cd cliente'''
+
+Una vez se encuentre en la carpeta cliente, ejecute el archivo main.py de la siguiente forma:
+
+'''python main.py'''

@@ -1,0 +1,16 @@
+--- REPORTE DE CITAS PARA: Tomás ---
+Fecha de descarga: 2025-12-01 16:59:27.370251
+----------------------------------------
+
+DATOS (JSON):
+{
+    "2026-10-20T20:00:00": "eXDjAPiWHOygZQ66SmU9Jkscc9URykkhHP7lE0ROyvtvGcd5893D3GBYwEZ5vw==",
+    "2025-12-21T11:00:00": "o0jjcGOPww2tFezKbaYT2QyFUZtJel41PRF4mr7iubkcby01KMfQCYxue5ExrQ==",
+    "2027-06-19T11:00:00": "C1USGXSdJwUsU0lMzrZfyBhN7XdGImMQLituBHfH8BnXtFAy",
+    "2027-02-02T00:00:00": "892Ajq+m0ghJDyv017Q3p6ZQ/fbfZGc5KBoyPV3Sa09lUGLc/w9O9ZqZgzATY2atMQ=="
+}
+
+----------------------------------------
+FIRMA DIGITAL DEL SERVIDOR (Verificada):
+f16S4+V28FSBxdCPB6FBPu4FTrslfIJllpFBaOP2sufmE9H/JfljVrOrcGSY2EmU0JQwqQE656ZPACXhjiYQOh6zSDAvyS00tCVHuQYytM8bYujFFNmq+T+GyLipaq0OTLYNy6rX5lN+hzFkqUYeiEBqRCzx09sPvf5+8rcw0Xg=
+----------------------------------------

@@ -1,4 +1,5 @@
 import os
+import getpass
 import json # Para leer/escribir los datos de la cita cifrada
 from datetime import datetime
 import logging # Importamos el módulo de logging
@@ -57,20 +58,31 @@ def generar_par_claves():
             os.path.dirname(__file__), 
             'certificado_servidor/Akey.pem'
         )
+        
+        # Pedimos la passphrase de la clave privada del servidor por terminal antes de iniciar el servidor por seguridad
+        print("\n" + "="*50)
+        print("🔐 INICIO SEGURO DEL SERVIDOR")
+        print("="*50)
+        password = getpass.getpass("Introduzca la passphrase de la clave privada del servidor: ")
+        
         with open(ruta_clave_privada, 'rb') as f:
             clave_privada_servidor = serialization.load_pem_private_key(
                 f.read(),
-                password="C0ntr4s3ñ4!".encode('utf-8')
+                password=password.encode('utf-8') if password else None
             )
         
-        # Derivar la clave pública de la clave privada (para uso interno)
         clave_publica_servidor = clave_privada_servidor.public_key()
         
-        logger.info("Clave privada del servidor cargada")
-        logger.info("Par de claves RSA-2048 inicializado desde archivo PEM")
+        print("✅ Clave privada cargada correctamente")
+        print("="*50 + "\n")
+        
+        logger.info("Clave privada del servidor cargada interactivamente")
         return True
+        
     except Exception as e:
         logger.error(f"Error cargando clave privada: {e}")
+        print(f"❌ Error: {e}")
+        print("Verifique que la passphrase sea correcta.")
         return False
 
 def desencriptar_asimetrico(mensaje_cifrado: str) -> str:
