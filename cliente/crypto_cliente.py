@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import logging # Importamos el módulo de logging
 
 # Para el cifrado/descifrado AES-GCM (Requisitos 2 y 3)
@@ -58,7 +58,7 @@ def cargar_cadena_certificacion(ruta_ac1='certificados_AC/ac1cert.pem', ruta_ac2
         logger.error(f"Error cargando cadena de confianza: {e}")
         return None, None
 
-def verificar_certificado(cert_servidor_pem, cert_ac1, cert_ac2):
+def verificar_certificado(cert_servidor_pem, cert_ac1, cert_ac2, index_cert_ac2):
     """
     Verifica el certificado del servidor usando la cadena de certificación
     
@@ -67,6 +67,7 @@ def verificar_certificado(cert_servidor_pem, cert_ac1, cert_ac2):
     2. Verificar que AC2 está firmado por AC1
     3. Verificar que el certificado del servidor está firmado por AC2
     4. Verificar fechas de validez
+    5. Verificar que el certificado del servidor sea válido (que no haya sido revocado)
     """
     try:
         # Cargar certificado del servidor
@@ -124,7 +125,6 @@ def verificar_certificado(cert_servidor_pem, cert_ac1, cert_ac2):
         
         # 4. Verificar fechas de validez
         logger.info("\nVerificando fechas de validez...")
-        from datetime import datetime, timezone
         ahora = datetime.now(timezone.utc)
         
         logger.info(f"Válido desde: {cert_servidor.not_valid_before_utc}")
@@ -140,6 +140,15 @@ def verificar_certificado(cert_servidor_pem, cert_ac1, cert_ac2):
             return False, None
         
         logger.info("✓ Fechas de validez correctas")
+
+        # 5. Verificar estado del certificado
+        logger.info("\nVerificando estado del certificado...")
+        for linea in index_cert_ac2:
+            if "CN=22125_22320" in linea:
+                if linea.split()[0] != "V":
+                    logger.error("✗ El certificado ha sido revocado")
+                    return False, None
+        logger.info("✓ Estado del certificado válido")
         
         # Extraer clave pública del certificado verificado
         clave_publica_servidor = cert_servidor.public_key()

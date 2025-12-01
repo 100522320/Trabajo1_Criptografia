@@ -107,6 +107,17 @@ class ClienteAPI:
                 
                 # Cargar cadena de confianza (AC1 y AC2)
                 cert_ac1, cert_ac2 = cargar_cadena_certificacion()
+
+                # Cargar índice de AC2
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                ruta_indice = os.path.join(current_dir, 'certificados_AC/index.txt')
+                try:
+                    with open(ruta_indice, "r") as f:
+                        indice = f.readlines()
+                except Exception as e:
+                    logger.error(f"No se pudo cargar el índice de la AC2: {e}")
+                    print("\n❌ ERROR: No se encontró el índice de la AC2")
+                    return False
                 
                 if cert_ac1 is None or cert_ac2 is None:
                     logger.error("No se pudo cargar la cadena de confianza")
@@ -117,7 +128,8 @@ class ClienteAPI:
                 verificado, clave_publica_servidor = verificar_certificado(
                     certificado_servidor_pem, 
                     cert_ac1, 
-                    cert_ac2
+                    cert_ac2, 
+                    indice
                 )
                 
                 if not verificado or clave_publica_servidor is None:
